@@ -40,59 +40,6 @@ membaca penjelasan fitur, destinasi, cerita, dan FAQ sebelum memilih. Aplikasi
 web baru dimuat setelah tombol **Buka Website** dipilih. APK tersedia di
 `downloads/guriang-garut.apk`.
 
-## Supabase (akun, destinasi, foto, dan video)
-
-Project Supabase: `https://hogwqxnggylmoaauhspf.supabase.co`.
-Supabase client sudah disiapkan; untuk mengaktifkannya tambahkan **publishable
-key** project dari **Supabase Dashboard → Project Settings → API Keys** ke
-`.env` lokal (salin dari `.env.example`). Publishable key memang aman digunakan
-oleh aplikasi klien; jangan pernah memakai atau menaruh `service_role` key di
-aplikasi.
-
-**Catatan penting:** SQLite di perangkat tetap digunakan untuk cache/offline;
-itu bukan pengganti database cloud. Sebelum sinkronisasi pertama, katalog seed
-masih hanya tersimpan lokal. Migration SQL menyiapkan tabel dan bucket di cloud,
-sedangkan tombol admin pada langkah 5 mengunggah katalog beserta file asset ke
-Supabase Storage dan menyimpan URL media pada tabel `public.destinations`.
-Setelah katalog tersedia di cloud, aplikasi daring membacanya dari Supabase dan
-memperbarui cache SQLite lokal.
-
-1. Di Supabase Dashboard, buka **SQL Editor** lalu jalankan
-   `supabase/migrations/20261016000000_create_guriang_supabase.sql`.
-   Ini membuat tabel ber-RLS, trigger profil akun, serta bucket publik
-   `destination-images` dan `destination-videos`. Hanya admin terverifikasi
-   yang dapat mengubah data destinasi atau mengunggah berkas.
-2. Buat `.env` lokal berdasarkan `.env.example`, lalu masukkan publishable key.
-   Jalankan aplikasi dengan perintah di atas atau pilih konfigurasi
-   **Guriang Garut (Supabase)** di VS Code. Jika membuat APK untuk dipasang di
-   ponsel, gunakan perintah build yang menyertakan `--dart-define-from-file=.env`
-   agar key ikut dikirim ke aplikasi.
-
-3. Daftarkan akun pertama. Di **SQL Editor** Supabase, tetapkan akun tersebut
-   sebagai admin memakai UUID pada **Authentication → Users**:
-
-       update public.profiles set is_admin = true where id = '<USER_UUID>';
-
-4. Deploy Edge Function penghapusan akun menggunakan Supabase CLI:
-
-       scoop install supabase
-       supabase login
-       supabase link --project-ref hogwqxnggylmoaauhspf
-       supabase functions deploy delete-account
-
-   CLI meminta konfigurasi project; rahasia service role hanya berada di
-   Supabase Edge Function, bukan di aplikasi.
-5. Masuk kembali dengan akun admin. Dari Profil, pilih
-   **Kirim foto, video, dan daftar ke Supabase** untuk mengunggah data tempat
-   wisata/budaya, foto, dan video lokal ke Supabase.
-
-Akun memakai Supabase Auth; profil disimpan di `public.profiles` dan log
-aktivitas di `public.user_activity_logs`. Katalog tersimpan di
-`public.destinations`. Media disimpan pada bucket Storage publik dengan nama
-file berdasarkan ID destinasi. Foto/video Supabase digunakan saat daring;
-file asset yang sudah ada tetap menjadi fallback untuk pemakaian offline.
-Akun SQLite lama dipindahkan saat pemilik login daring menggunakan email dan
-kata sandi yang sama. Favorit tetap tersedia dari SQLite lokal.
 
 ## Database SQLite (lokal/offline)
 
