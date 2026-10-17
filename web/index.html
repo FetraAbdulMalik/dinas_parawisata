@@ -1,0 +1,309 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <base href="$FLUTTER_BASE_HREF">
+  <meta charset="UTF-8">
+  <meta content="IE=Edge" http-equiv="X-UA-Compatible">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#2b6a0a">
+  <meta name="description" content="Jelajahi wisata alam, budaya, peta, dan cerita Garut bersama Guriang Garut.">
+  <meta property="og:title" content="Guriang Garut — Panduan Wisata & Budaya">
+  <meta property="og:description" content="Temukan destinasi, cerita, dan budaya Garut dalam satu aplikasi.">
+  <meta property="og:type" content="website">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black">
+  <meta name="apple-mobile-web-app-title" content="Guriang Garut">
+  <link rel="apple-touch-icon" href="icons/Icon-192.png">
+  <link rel="icon" type="image/png" href="favicon.png">
+  <link rel="manifest" href="manifest.json">
+  <title>Guriang Garut — Panduan Wisata & Budaya</title>
+  <style>
+    :root {
+      color-scheme: light;
+      --forest: #173d2c;
+      --leaf: #456b4d;
+      --cream: #f6f5ee;
+      --paper: #fffefa;
+      --muted: #68736a;
+      font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      font-synthesis: none;
+      text-rendering: optimizeLegibility;
+      -webkit-font-smoothing: antialiased;
+    }
+    * { box-sizing: border-box; }
+    body { min-width: 320px; min-height: 100vh; margin: 0; color: #1c2b22; background: var(--paper); }
+    button, a { font: inherit; }
+    a { color: inherit; text-decoration: none; }
+    .shell { width: min(1120px, calc(100% - 48px)); margin: 0 auto; }
+    .header { display: flex; min-height: 84px; align-items: center; justify-content: space-between; border-bottom: 1px solid rgba(28,43,34,.1); }
+    .brand { display: flex; align-items: center; gap: 12px; }
+    .brand img { width: 43px; height: 43px; object-fit: contain; }
+    .brand-name { display: block; color: var(--forest); font-family: Georgia, "Times New Roman", serif; font-size: 20px; font-weight: 700; letter-spacing: -.04em; }
+    .brand-caption { display: block; margin-top: 3px; color: var(--muted); font-size: 9px; font-weight: 700; letter-spacing: .14em; text-transform: uppercase; }
+    .header-note { color: var(--muted); font-size: 12px; }
+    .header-nav { display: flex; align-items: center; gap: 22px; color: #47544a; font-size: 11px; font-weight: 700; }
+    .header-nav a:hover { color: var(--leaf); }
+    .welcome { display: grid; min-height: calc(100vh - 143px); grid-template-columns: 1fr .94fr; align-items: center; gap: 70px; padding-block: 52px; }
+    .eyebrow { display: inline-flex; align-items: center; gap: 9px; color: var(--leaf); font-size: 10px; font-weight: 800; letter-spacing: .17em; text-transform: uppercase; }
+    .eyebrow::before { width: 23px; height: 1px; background: currentColor; content: ""; }
+    h1 { max-width: 620px; margin: 19px 0 17px; color: var(--forest); font-family: Georgia, "Times New Roman", serif; font-size: clamp(46px, 6.4vw, 75px); font-weight: 500; letter-spacing: -.065em; line-height: .99; }
+    h1 em { color: var(--leaf); font-weight: 500; }
+    .intro { max-width: 450px; margin: 0; color: var(--muted); font-size: 14px; line-height: 1.8; }
+    .choices { display: grid; gap: 13px; margin-top: 30px; }
+    .choice { display: flex; min-height: 78px; align-items: center; gap: 15px; padding: 13px 18px; border: 1px solid rgba(28,43,34,.12); border-radius: 9px; background: white; transition: transform .18s, border-color .18s, box-shadow .18s; }
+    .choice:hover { transform: translateY(-2px); border-color: rgba(69,107,77,.55); box-shadow: 0 12px 30px rgba(24,48,31,.08); }
+    .choice-primary { border-color: var(--forest); background: var(--forest); color: white; }
+    .choice-primary:hover { border-color: #28583b; background: #28583b; }
+    .choice-icon { display: grid; width: 43px; height: 43px; flex: 0 0 auto; place-items: center; border-radius: 50%; background: #edf3e2; color: var(--forest); font-size: 20px; }
+    .choice-primary .choice-icon { background: rgba(255,255,255,.14); color: white; }
+    .choice-copy { display: grid; flex: 1; gap: 4px; }
+    .choice-copy strong { font-size: 14px; }
+    .choice-copy small { color: var(--muted); font-size: 11px; line-height: 1.5; }
+    .choice-primary .choice-copy small { color: rgba(255,255,255,.74); }
+    .choice-arrow { font-size: 19px; }
+    .visual { position: relative; min-height: 475px; }
+    .visual-image { position: absolute; inset: 0 20px 25px 18px; overflow: hidden; border-radius: 48% 48% 8px 8px; background: #9ba88d; }
+    .visual-image img { width: 100%; height: 100%; object-fit: cover; }
+    .visual-image::after { position: absolute; inset: 40% 0 0; background: linear-gradient(transparent, rgba(13,36,23,.74)); content: ""; }
+    .visual-caption { position: absolute; right: 42px; bottom: 55px; left: 44px; color: white; }
+    .visual-caption span { font-size: 10px; font-weight: 700; letter-spacing: .15em; text-transform: uppercase; }
+    .visual-caption h2 { margin: 8px 0 0; font-family: Georgia, "Times New Roman", serif; font-size: 34px; font-weight: 500; letter-spacing: -.04em; }
+    .seal { position: absolute; top: 19px; right: -1px; display: grid; width: 77px; height: 77px; place-items: center; border: 1px solid rgba(28,43,34,.14); border-radius: 50%; background: var(--paper); color: var(--forest); font-family: Georgia, "Times New Roman", serif; font-size: 11px; text-align: center; transform: rotate(9deg); }
+    .content-section { padding: 83px 0; }
+    .section-soft { background: var(--cream); }
+    .section-heading { display: flex; align-items: end; justify-content: space-between; gap: 24px; margin-bottom: 29px; }
+    .section-heading h2 { max-width: 540px; margin: 12px 0 0; color: var(--forest); font-family: Georgia, "Times New Roman", serif; font-size: clamp(34px, 4vw, 46px); font-weight: 500; letter-spacing: -.055em; line-height: 1.08; }
+    .section-heading p { max-width: 350px; margin: 0 0 3px; color: var(--muted); font-size: 12px; line-height: 1.8; }
+    .feature-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; }
+    .feature-card { min-height: 199px; padding: 21px; border: 1px solid rgba(28,43,34,.1); border-radius: 8px; background: white; }
+    .feature-card-icon { display: grid; width: 41px; height: 41px; place-items: center; border-radius: 50%; background: #edf3e2; color: var(--forest); font-size: 19px; }
+    .feature-card h3 { margin: 20px 0 8px; color: var(--forest); font-family: Georgia, "Times New Roman", serif; font-size: 20px; font-weight: 600; }
+    .feature-card p { margin: 0; color: var(--muted); font-size: 11px; line-height: 1.75; }
+    .destination-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 17px; }
+    .destination-card { overflow: hidden; position: relative; min-height: 285px; border-radius: 8px; background: #81917b; color: white; }
+    .destination-card img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; transition: transform .45s; }
+    .destination-card:hover img { transform: scale(1.04); }
+    .destination-card::after { position: absolute; inset: 23% 0 0; background: linear-gradient(transparent, rgba(15,35,24,.84)); content: ""; }
+    .destination-copy { position: absolute; z-index: 1; right: 19px; bottom: 20px; left: 19px; }
+    .destination-tag { display: inline-flex; padding: 6px 9px; border: 1px solid rgba(255,255,255,.48); border-radius: 999px; font-size: 9px; font-weight: 700; letter-spacing: .1em; text-transform: uppercase; }
+    .destination-copy h3 { margin: 10px 0 5px; font-family: Georgia, "Times New Roman", serif; font-size: 25px; font-weight: 500; }
+    .destination-copy p { margin: 0; color: rgba(255,255,255,.82); font-size: 11px; }
+    .story-grid { display: grid; grid-template-columns: .85fr 1.15fr; align-items: center; gap: 57px; }
+    .story-image { position: relative; min-height: 345px; }
+    .story-image img { position: absolute; inset: 0 23px 20px 0; width: calc(100% - 23px); height: calc(100% - 20px); border-radius: 8px; object-fit: cover; }
+    .story-image::after { position: absolute; right: 0; bottom: 0; width: 42%; height: 43%; border: 1px solid rgba(69,107,77,.5); border-radius: 8px; content: ""; }
+    .story-copy h2 { max-width: 500px; margin: 13px 0; color: var(--forest); font-family: Georgia, "Times New Roman", serif; font-size: clamp(35px, 4vw, 47px); font-weight: 500; letter-spacing: -.055em; line-height: 1.08; }
+    .story-copy > p { max-width: 480px; margin: 0; color: var(--muted); font-size: 12px; line-height: 1.85; }
+    .story-points { display: grid; gap: 12px; margin: 20px 0 0; padding: 0; list-style: none; color: #405047; font-size: 11px; font-weight: 600; }
+    .story-points li { display: flex; align-items: center; gap: 9px; }
+    .story-points li::before { display: grid; width: 20px; height: 20px; flex: 0 0 auto; place-items: center; border-radius: 50%; background: #e9f0dc; color: var(--leaf); content: "✓"; }
+    .faq-grid { display: grid; grid-template-columns: .75fr 1.25fr; gap: 55px; }
+    .faq-intro h2 { margin: 13px 0 10px; color: var(--forest); font-family: Georgia, "Times New Roman", serif; font-size: 39px; font-weight: 500; letter-spacing: -.05em; line-height: 1.06; }
+    .faq-intro p { max-width: 290px; margin: 0; color: var(--muted); font-size: 11px; line-height: 1.8; }
+    details { border-bottom: 1px solid rgba(28,43,34,.13); }
+    details:first-child { border-top: 1px solid rgba(28,43,34,.13); }
+    summary { display: flex; min-height: 59px; align-items: center; justify-content: space-between; gap: 15px; color: var(--forest); font-size: 12px; font-weight: 700; cursor: pointer; list-style: none; }
+    summary::-webkit-details-marker { display: none; }
+    summary::after { color: var(--leaf); content: "+"; font-size: 20px; font-weight: 400; }
+    details[open] summary::after { content: "−"; }
+    details p { max-width: 600px; margin: 0 26px 16px 0; color: var(--muted); font-size: 11px; line-height: 1.8; }
+    .closing { padding: 43px 0; background: var(--forest); color: white; }
+    .closing-inner { display: flex; align-items: center; justify-content: space-between; gap: 25px; }
+    .closing h2 { margin: 0 0 7px; font-family: Georgia, "Times New Roman", serif; font-size: 31px; font-weight: 500; letter-spacing: -.04em; }
+    .closing p { max-width: 510px; margin: 0; color: rgba(255,255,255,.72); font-size: 11px; line-height: 1.7; }
+    .closing-actions { display: flex; flex-wrap: wrap; gap: 10px; flex: 0 0 auto; }
+    .closing-button { display: inline-flex; min-height: 43px; align-items: center; justify-content: center; gap: 8px; padding: 0 17px; border: 1px solid rgba(255,255,255,.4); border-radius: 999px; color: white; font-size: 11px; font-weight: 700; }
+    .closing-button-light { border-color: white; background: white; color: var(--forest); }
+    .closing-button:hover { background: rgba(255,255,255,.12); }
+    .closing-button-light:hover { background: #edf3e2; }
+    .footer { display: flex; min-height: 58px; align-items: center; justify-content: space-between; gap: 15px; border-top: 1px solid rgba(28,43,34,.1); color: var(--muted); font-size: 10px; }
+    #app-loading { display: none; position: fixed; z-index: 5; inset: 0; align-items: center; justify-content: center; background: #e9ecf1; color: var(--forest); font-size: 14px; font-weight: 700; }
+    #app-loading.is-visible { display: flex; }
+    #app-loading span { display: flex; align-items: center; gap: 11px; }
+    .spinner { width: 20px; height: 20px; border: 2px solid rgba(43,106,10,.2); border-top-color: #2b6a0a; border-radius: 50%; animation: spin .8s linear infinite; }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    :focus-visible { outline: 3px solid #94b75d; outline-offset: 4px; }
+    @media (max-width: 760px) {
+      .shell { width: min(100% - 36px, 520px); }
+      .header { min-height: 72px; }
+      .header-note { display: none; }
+      .header-nav { gap: 13px; font-size: 10px; }
+      .welcome { min-height: 0; grid-template-columns: 1fr; gap: 28px; padding-block: 42px 35px; }
+      h1 { max-width: 480px; font-size: clamp(47px, 12vw, 64px); }
+      .intro { font-size: 13px; }
+      .choices { margin-top: 23px; }
+      .visual { min-height: 340px; }
+      .visual-image { inset: 0 11px 18px 13px; }
+      .visual-caption { right: 28px; bottom: 38px; left: 33px; }
+      .visual-caption h2 { font-size: 29px; }
+      .seal { top: 8px; right: -2px; width: 64px; height: 64px; font-size: 9px; }
+      .content-section { padding: 61px 0; }
+      .section-heading { align-items: flex-start; flex-direction: column; gap: 11px; margin-bottom: 22px; }
+      .section-heading h2 { font-size: 36px; }
+      .section-heading p { font-size: 11px; }
+      .feature-grid { grid-template-columns: 1fr 1fr; gap: 9px; }
+      .feature-card { min-height: 185px; padding: 16px; }
+      .feature-card h3 { margin: 15px 0 7px; font-size: 18px; }
+      .feature-card p { font-size: 10px; }
+      .destination-grid { gap: 9px; }
+      .destination-card { min-height: 214px; }
+      .destination-copy { right: 11px; bottom: 13px; left: 11px; }
+      .destination-copy h3 { font-size: 18px; }
+      .destination-copy p { font-size: 9px; }
+      .destination-tag { padding: 5px 7px; font-size: 8px; }
+      .story-grid, .faq-grid { grid-template-columns: 1fr; gap: 26px; }
+      .story-image { min-height: 300px; }
+      .story-copy h2 { font-size: 38px; }
+      .faq-intro h2 { font-size: 36px; }
+      .closing { padding: 36px 0; }
+      .closing-inner { align-items: flex-start; flex-direction: column; }
+      .closing h2 { font-size: 29px; }
+      .closing-actions { width: 100%; }
+      .footer { align-items: flex-start; flex-direction: column; justify-content: center; padding-block: 14px; }
+    }
+    @media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation-duration: .01ms !important; transition-duration: .01ms !important; } }
+  </style>
+</head>
+<body>
+  <div id="welcome-screen">
+    <header class="header shell">
+      <a class="brand" href="./" aria-label="Guriang Garut">
+        <img src="assets/assets/images/logo_kabupaten_garut_transparent.png" alt="">
+        <span><span class="brand-name">Guriang Garut</span><span class="brand-caption">Jelajah rasa, alam & budaya</span></span>
+      </a>
+      <nav class="header-nav" aria-label="Navigasi halaman">
+        <a href="#fitur">Fitur</a>
+        <a href="#destinasi">Destinasi</a>
+        <a href="#faq">FAQ</a>
+      </nav>
+    </header>
+    <main class="welcome shell">
+      <section aria-labelledby="welcome-title">
+        <span class="eyebrow">Selamat datang di Garut</span>
+        <h1 id="welcome-title">Perjalanan indah, <em>selalu punya cerita.</em></h1>
+        <p class="intro">Pilih cara yang paling nyaman untuk menjelajahi destinasi, alam, budaya, dan cerita Garut.</p>
+        <div class="choices" aria-label="Pilih cara membuka Guriang Garut">
+          <button class="choice choice-primary" id="open-website" data-open-website type="button">
+            <span class="choice-icon" aria-hidden="true">⌖</span>
+            <span class="choice-copy"><strong>Buka Website</strong><small>Jelajahi Guriang Garut langsung di browser</small></span>
+            <span class="choice-arrow" aria-hidden="true">→</span>
+          </button>
+          <a class="choice" href="downloads/guriang-garut.apk" download="guriang-garut.apk">
+            <span class="choice-icon" aria-hidden="true">↓</span>
+            <span class="choice-copy"><strong>Unduh Aplikasi Android</strong><small>Pasang APK di ponsel Android kamu</small></span>
+            <span class="choice-arrow" aria-hidden="true">↗</span>
+          </a>
+        </div>
+      </section>
+      <div class="visual" aria-label="Situ Bagendit, salah satu destinasi di Garut">
+        <div class="visual-image">
+          <img src="assets/assets/images/situ_bangendit.jpg" alt="Pemandangan Situ Bagendit di Garut">
+          <div class="visual-caption"><span>Alam · Banyuresmi</span><h2>Situ Bagendit</h2></div>
+        </div>
+        <div class="seal" aria-hidden="true">Jelajah<br>Garut<br>✳</div>
+      </div>
+    </main>
+    <section class="content-section section-soft" id="fitur" aria-labelledby="features-title">
+      <div class="shell">
+        <div class="section-heading">
+          <div><span class="eyebrow">Teman perjalananmu</span><h2 id="features-title">Semua cerita Garut, dalam satu aplikasi.</h2></div>
+          <p>Kenali tempat yang akan kamu kunjungi dan siapkan perjalananmu dengan panduan praktis di browser atau ponsel.</p>
+        </div>
+        <div class="feature-grid">
+          <article class="feature-card"><span class="feature-card-icon" aria-hidden="true">⌖</span><h3>Jelajahi peta</h3><p>Temukan lokasi berbagai destinasi dan lihat rute perjalanan di peta.</p></article>
+          <article class="feature-card"><span class="feature-card-icon" aria-hidden="true">⌕</span><h3>Cari destinasi</h3><p>Telusuri tempat berdasarkan nama, lokasi, kategori, atau ceritanya.</p></article>
+          <article class="feature-card"><span class="feature-card-icon" aria-hidden="true">♫</span><h3>Dengar ceritanya</h3><p>Baca sejarah destinasi dan nikmati narasi audio saat tersedia.</p></article>
+          <article class="feature-card"><span class="feature-card-icon" aria-hidden="true">♡</span><h3>Simpan favorit</h3><p>Tandai destinasi pilihan untuk menemukannya kembali dengan mudah.</p></article>
+        </div>
+      </div>
+    </section>
+    <section class="content-section" id="destinasi" aria-labelledby="destinations-title">
+      <div class="shell">
+        <div class="section-heading">
+          <div><span class="eyebrow">Inspirasi perjalanan</span><h2 id="destinations-title">Mulai dari tempat yang istimewa.</h2></div>
+          <p>Dari lanskap alam hingga jejak sejarah, temukan tujuan yang membuat perjalananmu di Garut semakin berkesan.</p>
+        </div>
+        <div class="destination-grid">
+          <article class="destination-card">
+            <img src="assets/assets/images/candi_cangkuang.jpg" alt="Candi Cangkuang di kawasan Leles" loading="lazy">
+            <div class="destination-copy"><span class="destination-tag">Cagar budaya</span><h3>Candi Cangkuang</h3><p>Leles, Garut · Jejak sejarah di tepi danau</p></div>
+          </article>
+          <article class="destination-card">
+            <img src="assets/assets/images/situ_bangendit.jpg" alt="Pemandangan alam Situ Bagendit" loading="lazy">
+            <div class="destination-copy"><span class="destination-tag">Wisata alam</span><h3>Situ Bagendit</h3><p>Banyuresmi, Garut · Danau dan cerita rakyat</p></div>
+          </article>
+        </div>
+      </div>
+    </section>
+    <section class="content-section section-soft" aria-labelledby="story-title">
+      <div class="story-grid shell">
+        <div class="story-image"><img src="assets/assets/images/candi_cangkuang.jpg" alt="Suasana kawasan Candi Cangkuang" loading="lazy"></div>
+        <div class="story-copy">
+          <span class="eyebrow">Bukan sekadar berkunjung</span>
+          <h2 id="story-title">Kenali kisah di balik setiap perjalanan.</h2>
+          <p>Guriang Garut menggabungkan panduan wisata dengan cerita lokal agar kamu bisa mengenal lebih dekat alam, sejarah, dan budaya daerah ini.</p>
+          <ul class="story-points">
+            <li>Detail dan informasi lokasi destinasi</li>
+            <li>Kisah sejarah dan kekayaan budaya Garut</li>
+            <li>Pilihan untuk menjelajah lewat browser atau Android</li>
+          </ul>
+        </div>
+      </div>
+    </section>
+    <section class="content-section" id="faq" aria-labelledby="faq-title">
+      <div class="faq-grid shell">
+        <div class="faq-intro"><span class="eyebrow">Pertanyaan umum</span><h2 id="faq-title">Sebelum mulai menjelajah.</h2><p>Informasi singkat untuk memilih cara menggunakan Guriang Garut.</p></div>
+        <div>
+          <details><summary>Apa itu Guriang Garut?</summary><p>Aplikasi panduan wisata dan budaya untuk membantu menemukan destinasi, melihat peta, membaca cerita, serta menyimpan tempat favorit.</p></details>
+          <details><summary>Apa bedanya website dan aplikasi Android?</summary><p>Website bisa langsung digunakan di browser. APK dapat dipasang di perangkat Android. Keduanya menjalankan aplikasi Guriang Garut.</p></details>
+          <details><summary>Apakah website memerlukan pemasangan?</summary><p>Tidak. Pilih “Buka Website” dan aplikasi akan berjalan langsung di browser. Koneksi internet diperlukan untuk membuka halaman web.</p></details>
+          <details><summary>Bagaimana cara memasang APK?</summary><p>Unduh APK melalui tombol di halaman ini, buka berkasnya di perangkat Android, lalu ikuti petunjuk pemasangan perangkat.</p></details>
+        </div>
+      </div>
+    </section>
+    <section class="closing">
+      <div class="closing-inner shell">
+        <div><h2>Siap menemukan cerita Garut?</h2><p>Buka aplikasi langsung dari browser, atau unduh APK untuk memasangnya di ponsel Android.</p></div>
+        <div class="closing-actions">
+          <button class="closing-button closing-button-light" type="button" data-open-website>Buka Website <span aria-hidden="true">→</span></button>
+          <a class="closing-button" href="downloads/guriang-garut.apk" download="guriang-garut.apk">Unduh APK <span aria-hidden="true">↓</span></a>
+        </div>
+      </div>
+    </section>
+    <footer class="footer shell">
+      <span>© <span id="year">2026</span> Guriang Garut</span>
+      <span>Dibuat untuk mengenal lebih dekat keindahan Garut.</span>
+    </footer>
+  </div>
+  <div id="app-loading" role="status" aria-live="polite"><span><i class="spinner" aria-hidden="true"></i>Membuka aplikasi Guriang Garut…</span></div>
+  <script>
+    const welcomeScreen = document.querySelector("#welcome-screen");
+    const loadingScreen = document.querySelector("#app-loading");
+    const websiteButtons = document.querySelectorAll("[data-open-website]");
+
+    document.querySelector("#year").textContent = new Date().getFullYear();
+    window.addEventListener("flutter-first-frame", () => {
+      loadingScreen.classList.remove("is-visible");
+    }, { once: true });
+
+    websiteButtons.forEach((websiteButton) => {
+      websiteButton.addEventListener("click", () => {
+        websiteButtons.forEach((button) => { button.disabled = true; });
+        welcomeScreen.hidden = true;
+        loadingScreen.classList.add("is-visible");
+
+        const flutterScript = document.createElement("script");
+        flutterScript.src = "flutter_bootstrap.js";
+        flutterScript.async = true;
+        flutterScript.addEventListener("error", () => {
+          welcomeScreen.hidden = false;
+          loadingScreen.classList.remove("is-visible");
+          websiteButtons.forEach((button) => { button.disabled = false; });
+          window.alert("Aplikasi web gagal dimuat. Periksa koneksi lalu coba lagi.");
+        });
+        document.body.appendChild(flutterScript);
+      });
+    });
+  </script>
+</body>
+</html>

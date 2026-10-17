@@ -1,0 +1,14 @@
+Cerita destinasi disimpan sebagai file teks UTF-8 di folder ini.
+
+Untuk mengisi cerita:
+1. Buka dokumen Word, lalu pilih Save As dan simpan sebagai Plain Text (.txt).
+2. Pilih encoding UTF-8 jika Word menanyakan encoding.
+3. Ubah nama file menjadi nama destinasi huruf kecil; spasi menjadi garis bawah.
+4. Simpan file di folder assets/stories/.
+
+Contoh:
+- Candi Cangkuang.txt -> candi_cangkuang.txt
+- Pemandian Air Panas Cipanas -> pemandian_air_panas_cipanas.txt
+
+Cerita dari file .txt akan ditampilkan dan dibacakan di halaman detail.
+Jika file destinasi belum ada, aplikasi memakai cerita dari database.

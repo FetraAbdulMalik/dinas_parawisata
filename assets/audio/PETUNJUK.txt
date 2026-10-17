@@ -1,0 +1,2 @@
+Taruh file audio (.mp3) di folder ini.
+Nama file mengikuti nama destinasi huruf kecil dengan garis bawah, contoh: candi_cangkuang.mp3
