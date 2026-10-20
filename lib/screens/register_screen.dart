@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../providers/app_state.dart';
-import '../theme.dart';
 import '../utils/password_policy.dart';
 import '../widgets/auth_widgets.dart';
 
@@ -101,14 +100,21 @@ class _RegisterScreenState extends State<RegisterScreen> {
         mainAxisSize: MainAxisSize.min,
         children: [
           const Text('Sudah punya akun? ',
-              style: TextStyle(fontSize: 12, color: AppColors.muted)),
+              style: TextStyle(fontSize: 12, color: Colors.white)),
           GestureDetector(
             onTap: () => Navigator.of(context).maybePop(),
             child: const Text('Masuk',
                 style: TextStyle(
                     fontSize: 12,
-                    color: AppColors.green,
-                    fontWeight: FontWeight.w700)),
+                    color: Colors.white,
+                    fontWeight: FontWeight.w700,
+                    shadows: [
+                      Shadow(
+                        color: Colors.black54,
+                        blurRadius: 4,
+                        offset: Offset(0, 1),
+                      ),
+                    ])),
           ),
         ],
       ),

@@ -45,7 +45,7 @@ class _LoginScreenState extends State<LoginScreen> {
   Widget build(BuildContext context) {
     return AuthScaffold(
       title: 'Masuk',
-      showBack: false,
+      showBack: true,
       heading: 'Selamat datang kembali',
       description:
           'Masuk untuk membuka peta dan menyimpan destinasi favorit.',
@@ -97,7 +97,7 @@ class _LoginScreenState extends State<LoginScreen> {
             mainAxisSize: MainAxisSize.min,
             children: [
               const Text('Belum punya akun? ',
-                  style: TextStyle(fontSize: 12, color: AppColors.muted)),
+                  style: TextStyle(fontSize: 12, color: Colors.white)),
               GestureDetector(
                 onTap: () async {
                   final navigator = Navigator.of(context);
@@ -112,16 +112,44 @@ class _LoginScreenState extends State<LoginScreen> {
                 child: const Text('Daftar',
                     style: TextStyle(
                         fontSize: 12,
-                        color: AppColors.green,
-                        fontWeight: FontWeight.w700)),
+                        color: Colors.white,
+                        fontWeight: FontWeight.w700,
+                        shadows: [
+                          Shadow(
+                            color: Colors.black54,
+                            blurRadius: 4,
+                            offset: Offset(0, 1),
+                          ),
+                        ])),
               ),
             ],
           ),
           const SizedBox(height: 18),
+          TextButton.icon(
+            onPressed: () {
+              if (Navigator.of(context).canPop()) {
+                Navigator.of(context).pop();
+              }
+            },
+            icon: const Icon(Icons.explore_outlined),
+            label: const Text('Lanjutkan menjelajahi tanpa masuk'),
+            style: TextButton.styleFrom(foregroundColor: Colors.white),
+          ),
+          const SizedBox(height: 8),
           const Text(
             'Data akun Anda digunakan untuk layanan aplikasi dan dijaga kerahasiaannya.',
             textAlign: TextAlign.center,
-            style: TextStyle(fontSize: 10, color: AppColors.muted),
+            style: TextStyle(
+              fontSize: 10,
+              color: Colors.white,
+              shadows: [
+                Shadow(
+                  color: Colors.black54,
+                  blurRadius: 4,
+                  offset: Offset(0, 1),
+                ),
+              ],
+            ),
           ),
         ],
       ),

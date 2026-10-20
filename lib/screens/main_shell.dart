@@ -70,6 +70,23 @@ class _MainShellState extends State<MainShell> {
         },
       );
 
+  Widget _accountAction(AppState state) {
+    final isSignedIn = state.user != null;
+    final onPressed = isSignedIn
+        ? () => _goTab(3)
+        : () => Navigator.of(context)
+            .push(MaterialPageRoute(builder: (_) => const LoginScreen()));
+
+    return IconButton(
+      tooltip: isSignedIn ? 'Profil' : 'Masuk',
+      onPressed: onPressed,
+      icon: Icon(
+        isSignedIn ? Icons.account_circle : Icons.account_circle_outlined,
+        size: 30,
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final state = context.watch<AppState>();
@@ -124,6 +141,7 @@ class _MainShellState extends State<MainShell> {
             icon: Icon(_searching ? Icons.close : Icons.search, size: 32),
             onPressed: _toggleSearch,
           ),
+          _accountAction(state),
           const SizedBox(width: 8),
         ],
       ),
@@ -134,31 +152,6 @@ class _MainShellState extends State<MainShell> {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               const SizedBox(height: 16),
-              Padding(
-                padding: const EdgeInsets.only(right: 16, bottom: 8),
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.end,
-                  children: [
-                    Image.asset(
-                      'assets/images/logo_kabupaten_garut_transparent.png',
-                      width: 34,
-                      height: 34,
-                      fit: BoxFit.contain,
-                      semanticLabel: 'Lambang Kabupaten Garut',
-                    ),
-                    const SizedBox(width: 6),
-                    SizedBox(
-                      width: 100,
-                      height: 38,
-                      child: Image.asset(
-                        'assets/images/logo_disparbud_garut_transparent.png',
-                        fit: BoxFit.contain,
-                        semanticLabel: 'Logo Disparbud Garut',
-                      ),
-                    ),
-                  ],
-                ),
-              ),
               _drawerItem('HOME', () => _goTab(0)),
               _drawerItem('PETA BUDAYA', () => _goTab(1)),
               _drawerItem('FAVORITE', () => _goTab(2)),
