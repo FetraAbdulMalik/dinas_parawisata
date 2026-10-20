@@ -6,6 +6,9 @@ class MapLibre3DWebView extends StatelessWidget {
   final List<Map<String, Object>> destinations;
   final double? selectedLatitude;
   final double? selectedLongitude;
+  final String focusKey;
+  final ValueChanged<int> onDestinationTap;
+  final bool isInteractive;
 
   const MapLibre3DWebView({
     super.key,
@@ -14,6 +17,9 @@ class MapLibre3DWebView extends StatelessWidget {
     required this.destinations,
     required this.selectedLatitude,
     required this.selectedLongitude,
+    required this.focusKey,
+    required this.onDestinationTap,
+    this.isInteractive = true,
   });
 
   @override

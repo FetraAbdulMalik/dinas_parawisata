@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../providers/app_state.dart';
+import '../utils/confirmation_dialog.dart';
 import '../utils/password_policy.dart';
 import '../widgets/auth_widgets.dart';
 import '../widgets/copyright_footer.dart';
@@ -42,21 +43,10 @@ class _PrivacyScreenState extends State<PrivacyScreen> {
   }
 
   Future<void> _delete() async {
-    final ok = await showDialog<bool>(
+    final ok = await showConfirmationDialog(
       context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('Hapus akun'),
-        content: const Text(
-            'Akun dan daftar favorit Anda akan dihapus permanen. Lanjutkan?'),
-        actions: [
-          TextButton(
-              onPressed: () => Navigator.pop(ctx, false),
-              child: const Text('Batal')),
-          TextButton(
-              onPressed: () => Navigator.pop(ctx, true),
-              child: const Text('Hapus')),
-        ],
-      ),
+      title: 'Hapus akun',
+      message: 'Akun dan daftar favorit Anda akan dihapus permanen. Lanjutkan?',
     );
     if (ok == true && mounted) {
       final error = await context.read<AppState>().deleteAccount();

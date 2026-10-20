@@ -1,4 +1,22 @@
+import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
+
+const appDialogAnimationStyle = AnimationStyle(
+  duration: Duration(milliseconds: 280),
+  reverseDuration: Duration(milliseconds: 200),
+  curve: Curves.easeOutCubic,
+  reverseCurve: Curves.easeInCubic,
+);
+
+class AppScrollBehavior extends MaterialScrollBehavior {
+  @override
+  Set<PointerDeviceKind> get dragDevices => {
+        PointerDeviceKind.touch,
+        PointerDeviceKind.mouse,
+        PointerDeviceKind.trackpad,
+        PointerDeviceKind.stylus,
+      };
+}
 
 class AppColors {
   static const green = Color(0xFF2B6A0A);

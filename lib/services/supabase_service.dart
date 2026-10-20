@@ -2,7 +2,9 @@ import 'package:flutter/services.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../models/destination.dart';
+import '../models/destination_review.dart';
 import '../supabase_config.dart';
+import '../utils/destination_image_assets.dart';
 
 class SupabaseService {
   SupabaseService._();
@@ -11,6 +13,7 @@ class SupabaseService {
 
   static const imageBucket = 'destination-images';
   static const videoBucket = 'destination-videos';
+  static const profileAvatarBucket = 'profile-avatars';
 
   bool initialized = false;
   String? initializationError;
@@ -47,6 +50,105 @@ class SupabaseService {
     return rows
         .map((row) => Destination.fromMap(Map<String, Object?>.from(row)))
         .toList();
+  }
+
+  Future<Map<int, int>> getDestinationSearchCounts() async {
+    final rows = await client
+        .from('destination_search_stats')
+        .select('destination_id, search_count');
+    return {
+      for (final row in rows)
+        (row['destination_id'] as num).toInt():
+            (row['search_count'] as num).toInt(),
+    };
+  }
+
+  Future<int> recordDestinationSearch(int destinationId) async {
+    final result = await client.rpc(
+      'record_destination_search',
+      params: {'p_destination_id': destinationId},
+    );
+    if (result is! num) {
+      throw StateError(
+          'Supabase mengembalikan jumlah pencarian yang tidak valid.');
+    }
+    return result.toInt();
+  }
+
+  Future<Map<int, (double, int)>> getDestinationRatingStats() async {
+    final rows =
+        await client.from('destination_rating_stats').select().limit(1000);
+    return {
+      for (final row in rows)
+        (row['destination_id'] as num).toInt(): (
+          (row['average_rating'] as num).toDouble(),
+          (row['review_count'] as num).toInt(),
+        ),
+    };
+  }
+
+  Future<List<DestinationReview>> getDestinationReviews(
+    int destinationId,
+  ) async {
+    final rows = await client
+        .from('destination_reviews')
+        .select('destination_id, user_id, rating, review, created_at')
+        .eq('destination_id', destinationId)
+        .order('updated_at', ascending: false)
+        .limit(5);
+    return rows
+        .map((row) => DestinationReview.fromMap(
+              Map<String, Object?>.from(row),
+            ))
+        .toList();
+  }
+
+  Future<DestinationReview?> getUserDestinationReview({
+    required int destinationId,
+    required String userId,
+  }) async {
+    final rows = await client
+        .from('destination_reviews')
+        .select('destination_id, user_id, rating, review, created_at')
+        .eq('destination_id', destinationId)
+        .eq('user_id', userId)
+        .limit(1);
+    if (rows.isEmpty) return null;
+    return DestinationReview.fromMap(Map<String, Object?>.from(rows.first));
+  }
+
+  Future<DestinationReview> upsertDestinationReview({
+    required String userId,
+    required int destinationId,
+    required int rating,
+    required String review,
+  }) async {
+    final row = await client
+        .from('destination_reviews')
+        .upsert(
+          {
+            'user_id': userId,
+            'destination_id': destinationId,
+            'rating': rating,
+            'review': review,
+            'updated_at': DateTime.now().toUtc().toIso8601String(),
+          },
+          onConflict: 'destination_id,user_id',
+        )
+        .select('destination_id, user_id, rating, review, created_at')
+        .single();
+    return DestinationReview.fromMap(Map<String, Object?>.from(row));
+  }
+
+  Future<void> deleteDestinationReview({
+    required int destinationId,
+    required String userId,
+  }) async {
+    await client
+        .from('destination_reviews')
+        .delete()
+        .eq('destination_id', destinationId)
+        .eq('user_id', userId);
   }
 
   Future<void> upsertUserProfile({
@@ -99,6 +201,153 @@ class SupabaseService {
     }
   }
 
+  Future<Destination> createDestination(Destination destination) async {
+    final values = destination.toMap()..remove('id');
+    final row =
+        await client.from('destinations').insert(values).select().single();
+    return Destination.fromMap(Map<String, Object?>.from(row));
+  }
+
+  Future<void> updateDestination(Destination destination) async {
+    final values = destination.toMap()..remove('id');
+    final rows = await client
+        .from('destinations')
+        .update(values)
+        .eq('id', destination.id)
+        .select('id');
+    if (rows.isEmpty) {
+      throw Exception(
+        'Destinasi tidak ditemukan atau akun tidak memiliki izin mengubah.',
+      );
+    }
+  }
+
+  Future<void> deleteDestination(int id) async {
+    final deleted =
+        await client.from('destinations').delete().eq('id', id).select('id');
+    if (deleted.isEmpty) {
+      throw Exception(
+        'Destinasi tidak ditemukan atau akun tidak memiliki izin menghapus.',
+      );
+    }
+  }
+
+  Future<String> uploadDestinationImage({
+    required int destinationId,
+    required String fileName,
+    required Uint8List bytes,
+  }) async {
+    final extension = _mediaExtension(fileName);
+    final contentType = switch (extension) {
+      'jpg' || 'jpeg' => 'image/jpeg',
+      'png' => 'image/png',
+      'webp' => 'image/webp',
+      _ => throw const FormatException(
+          'Foto harus berformat JPG, PNG, atau WebP.'),
+    };
+    return _uploadDestinationMedia(
+      bucket: imageBucket,
+      destinationId: destinationId,
+      prefix: 'cover',
+      extension: extension,
+      bytes: bytes,
+      contentType: contentType,
+    );
+  }
+
+  Future<String> uploadDestinationVideo({
+    required int destinationId,
+    required String fileName,
+    required Uint8List bytes,
+  }) async {
+    final extension = _mediaExtension(fileName);
+    if (extension != 'mp4') {
+      throw const FormatException('Video harus berformat MP4.');
+    }
+    return _uploadDestinationMedia(
+      bucket: videoBucket,
+      destinationId: destinationId,
+      prefix: 'video',
+      extension: extension,
+      bytes: bytes,
+      contentType: 'video/mp4',
+    );
+  }
+
+  Future<String> _uploadDestinationMedia({
+    required String bucket,
+    required int destinationId,
+    required String prefix,
+    required String extension,
+    required Uint8List bytes,
+    required String contentType,
+  }) async {
+    final path =
+        'admin/$destinationId/$prefix-${DateTime.now().microsecondsSinceEpoch}.$extension';
+    await client.storage.from(bucket).uploadBinary(
+          path,
+          bytes,
+          fileOptions: FileOptions(
+            contentType: contentType,
+            upsert: false,
+          ),
+        );
+    return client.storage.from(bucket).getPublicUrl(path);
+  }
+
+  Future<void> deleteDestinationMedia({
+    required String bucket,
+    required String url,
+  }) async {
+    final uri = Uri.tryParse(url);
+    final marker = '/storage/v1/object/public/$bucket/';
+    final pathIndex = uri?.path.indexOf(marker) ?? -1;
+    if (uri == null || pathIndex < 0) return;
+    final expectedOrigin = Uri.parse(
+      client.storage.from(bucket).getPublicUrl('destination-media-check'),
+    ).origin;
+    if (uri.origin != expectedOrigin) return;
+    final path = uri.path.substring(pathIndex + marker.length);
+    if (path.isEmpty) return;
+    await client.storage.from(bucket).remove([path]);
+  }
+
+  Future<void> updateDestinationPracticalInfo(Destination destination) async {
+    await client.from('destinations').update({
+      'opening_hours': destination.openingHours,
+      'ticket_price': destination.ticketPrice,
+      'facilities': destination.facilities,
+      'contact': destination.contact,
+      'no_sk_bupati': destination.noSkBupati,
+      'practical_info_updated_at':
+          destination.practicalInfoUpdatedAt?.toUtc().toIso8601String(),
+    }).eq('id', destination.id);
+  }
+
+  Future<String> uploadProfileAvatar({
+    required String userId,
+    required Uint8List bytes,
+    required String contentType,
+  }) async {
+    if (currentUid != userId) {
+      throw StateError('Akun Supabase yang aktif tidak cocok.');
+    }
+
+    const path = 'avatar';
+    await client.storage.from(profileAvatarBucket).uploadBinary(
+          '$userId/$path',
+          bytes,
+          fileOptions: FileOptions(
+            upsert: true,
+            contentType: contentType,
+          ),
+        );
+
+    final publicUrl =
+        client.storage.from(profileAvatarBucket).getPublicUrl('$userId/$path');
+    return '$publicUrl?v=${DateTime.now().millisecondsSinceEpoch}';
+  }
+
   Future<List<Destination>> uploadDestinationMedia(
     List<Destination> destinations,
   ) async {
@@ -108,20 +357,27 @@ class SupabaseService {
 
     for (final destination in destinations) {
       var updated = destination;
-      if (destination.imageAsset.isNotEmpty &&
-          availableAssets.contains(destination.imageAsset)) {
-        final bytes = await _loadAsset(destination.imageAsset);
-        final path = '${destination.id}/${_fileName(destination.imageAsset)}';
+      final destinationSlug = destinationImageSlug(destination.name);
+      final imageAsset = findDestinationImageAsset(
+        destination.name,
+        availableAssets,
+        fallbackAsset: destination.imageAsset,
+      );
+      if (imageAsset != null) {
+        final bytes = await _loadAsset(imageAsset);
+        final extension = _fileName(imageAsset).split('.').last.toLowerCase();
+        final path = '$destinationSlug.$extension';
         await client.storage.from(imageBucket).uploadBinary(
               path,
               bytes,
               fileOptions: FileOptions(
                 upsert: true,
-                contentType: _contentType(destination.imageAsset),
+                contentType: _contentType(imageAsset),
               ),
             );
         updated = updated.copyWith(
           imageUrl: client.storage.from(imageBucket).getPublicUrl(path),
+          imageAsset: imageAsset,
         );
       }
 
@@ -154,6 +410,14 @@ class SupabaseService {
   }
 
   String _fileName(String assetPath) => assetPath.split('/').last;
+
+  String _mediaExtension(String fileName) {
+    final separator = fileName.lastIndexOf('.');
+    if (separator < 0 || separator == fileName.length - 1) {
+      throw const FormatException('Nama file media tidak memiliki ekstensi.');
+    }
+    return fileName.substring(separator + 1).toLowerCase();
+  }
 
   String _contentType(String path) {
     final extension = path.split('.').last.toLowerCase();

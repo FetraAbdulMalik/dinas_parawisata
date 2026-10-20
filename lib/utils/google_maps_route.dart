@@ -1,20 +1,13 @@
 import '../models/destination.dart';
 
-Uri googleMapsDirectionsUri(Destination destination) => Uri.https(
-      'www.google.com',
-      '/maps/dir/',
-      {
-        'api': '1',
-        'destination': '${destination.latitude},${destination.longitude}',
-        'travelmode': 'driving',
-      },
+/// Membuka Google Maps dengan rute menuju koordinat destinasi.
+/// Menggunakan path /maps/dir/ dan parameter 'destination' agar Google Maps
+/// menampilkan rute perjalanan ke titik yang ditentukan.
+Uri googleMapsDirectionsUri(Destination destination) => Uri.parse(
+      'https://www.google.com/maps/dir/?api=1&destination=${destination.latitude},${destination.longitude}&travelmode=driving',
     );
 
-Uri googleMapsLocationUri(Destination destination) => Uri.https(
-      'www.google.com',
-      '/maps/search/',
-      {
-        'api': '1',
-        'query': '${destination.latitude},${destination.longitude}',
-      },
+/// Menampilkan pin marker merah persis di titik koordinat yang ditentukan.
+Uri googleMapsLocationUri(Destination destination) => Uri.parse(
+      'https://www.google.com/maps/search/?api=1&query=${destination.latitude},${destination.longitude}',
     );

@@ -48,13 +48,13 @@ INSERT INTO destinations
   (name, category, location, description, latitude, longitude)
 VALUES
   ('Candi Cangkuang', 'Cagar Budaya', 'Leles, Garut', '', -7.1033, 107.9172),
-  ('Situ Cangkuang', 'Alam', 'Leles, Garut', '', -7.1050, 107.9150),
-  ('Kawah Talaga Bodas', 'Alam', 'Wanaraja, Garut', '', -7.2092, 107.7347),
-  ('Gunung Papandayan', 'Alam', 'Cisurupan, Garut', '', -7.3195, 107.7306),
-  ('Situ Bagendit', 'Alam', 'Banyuresmi, Garut', '', -7.1672, 107.9494),
+  ('Situ Cangkuang', 'Danau', 'Leles, Garut', '', -7.1050, 107.9150),
+  ('Kawah Talaga Bodas', 'Kawah', 'Wanaraja, Garut', '', -7.2092, 107.7347),
+  ('Gunung Papandayan', 'Gunung', 'Cisurupan, Garut', '', -7.3195, 107.7306),
+  ('Situ Bagendit', 'Danau', 'Banyuresmi, Garut', '', -7.1672, 107.9494),
   ('Kampung Pulo', 'Cagar Budaya', 'Leles, Garut', '', -7.1028, 107.9181),
   ('Pemandian Air Panas Cipanas', 'Alam', 'Tarogong Kaler, Garut', '', -7.1850, 107.8020),
-  ('Pantai Santolo', 'Alam', 'Cikelet, Garut', '', -7.6678, 107.7219),
+  ('Pantai Santolo', 'Laut', 'Cikelet, Garut', '', -7.6678, 107.7219),
   ('Lais', 'Warisan Budaya Tak Benda', 'Cibatu, Garut', '', -7.0830, 107.9840),
   ('Surak Ibra', 'Warisan Budaya Tak Benda', 'Wanaraja, Garut', '', -7.1740, 107.9560),
   ('Badeng', 'Warisan Budaya Tak Benda', 'Sanding, Malangbong, Garut', '', -7.0200, 108.0900);

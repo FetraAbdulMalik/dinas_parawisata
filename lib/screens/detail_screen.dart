@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:math' as math;
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_tts/flutter_tts.dart';
@@ -13,9 +14,11 @@ import 'package:video_player/video_player.dart';
 import '../models/destination.dart';
 import '../providers/app_state.dart';
 import '../theme.dart';
+import '../utils/confirmation_dialog.dart';
 import '../utils/google_maps_route.dart';
 import '../widgets/copyright_footer.dart';
 import '../widgets/destination_image.dart';
+import '../widgets/destination_rating_section.dart';
 import 'login_screen.dart';
 
 /// Layar detail: video (bila ada), pemutar audio dari assets,
@@ -170,6 +173,244 @@ class _DetailScreenState extends State<DetailScreen> {
         ),
         duration: const Duration(seconds: 6),
       ));
+  }
+
+  Future<void> _editPracticalInfo(Destination destination) async {
+    final openingHoursController =
+        TextEditingController(text: destination.openingHours);
+    final ticketPriceController =
+        TextEditingController(text: destination.ticketPrice);
+    final facilitiesController =
+        TextEditingController(text: destination.facilities);
+    final contactController = TextEditingController(text: destination.contact);
+    final noSkBupatiController =
+        TextEditingController(text: destination.noSkBupati);
+
+    try {
+      final result = await showDialog<
+          ({
+            String openingHours,
+            String ticketPrice,
+            String facilities,
+            String contact,
+            String noSkBupati
+          })>(
+        context: context,
+        animationStyle: appDialogAnimationStyle,
+        builder: (dialogContext) => AlertDialog(
+          title: const Text('Edit informasi praktis'),
+          content: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                TextField(
+                  controller: openingHoursController,
+                  decoration: const InputDecoration(
+                    labelText: 'Jam operasional',
+                    hintText: 'Contoh: Setiap hari, 08.00–16.00',
+                  ),
+                ),
+                TextField(
+                  controller: ticketPriceController,
+                  decoration: const InputDecoration(
+                    labelText: 'Harga tiket',
+                    hintText: 'Contoh: Gratis atau Rp10.000',
+                  ),
+                ),
+                TextField(
+                  controller: facilitiesController,
+                  minLines: 2,
+                  maxLines: 4,
+                  decoration: const InputDecoration(
+                    labelText: 'Fasilitas',
+                    hintText: 'Pisahkan setiap fasilitas dengan baris baru',
+                  ),
+                ),
+                TextField(
+                  controller: contactController,
+                  keyboardType: TextInputType.phone,
+                  decoration: const InputDecoration(
+                    labelText: 'Kontak pengelola',
+                    hintText: 'Nomor telepon atau informasi kontak',
+                  ),
+                ),
+                TextField(
+                  controller: noSkBupatiController,
+                  decoration: const InputDecoration(
+                    labelText: 'No. SK Bupati',
+                    hintText: 'Nomor surat keputusan Bupati',
+                  ),
+                ),
+                const SizedBox(height: 8),
+                const Text(
+                  'Kosongkan informasi yang belum terverifikasi. '
+                  'Tanggal pembaruan akan diisi otomatis.',
+                  style: TextStyle(fontSize: 12, color: AppColors.muted),
+                ),
+              ],
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(dialogContext),
+              child: const Text('Batal'),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.pop(
+                dialogContext,
+                (
+                  openingHours: openingHoursController.text,
+                  ticketPrice: ticketPriceController.text,
+                  facilities: facilitiesController.text,
+                  contact: contactController.text,
+                  noSkBupati: noSkBupatiController.text,
+                ),
+              ),
+              child: const Text('Simpan'),
+            ),
+          ],
+        ),
+      );
+      if (result == null || !mounted) return;
+
+      try {
+        await context.read<AppState>().updateDestinationPracticalInfo(
+              destinationId: destination.id,
+              openingHours: result.openingHours,
+              ticketPrice: result.ticketPrice,
+              facilities: result.facilities,
+              contact: result.contact,
+              noSkBupati: result.noSkBupati,
+            );
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Informasi praktis berhasil disimpan.')),
+        );
+      } on Exception catch (error) {
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Gagal menyimpan informasi: $error')),
+        );
+      }
+    } finally {
+      openingHoursController.dispose();
+      ticketPriceController.dispose();
+      facilitiesController.dispose();
+      contactController.dispose();
+      noSkBupatiController.dispose();
+    }
+  }
+
+  Widget _practicalInfoItem(IconData icon, String label, String value) {
+    return Padding(
+      padding: const EdgeInsets.only(top: 12),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Icon(icon, size: 20, color: AppColors.green),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(label,
+                    style:
+                        const TextStyle(fontSize: 12, color: AppColors.muted)),
+                const SizedBox(height: 2),
+                Text(
+                  value.trim().isEmpty ? 'Belum tersedia' : value.trim(),
+                  style: const TextStyle(fontSize: 14, height: 1.4),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  String _formatPracticalInfoDate(DateTime? date) {
+    if (date == null) return 'Belum diperbarui';
+    const months = [
+      'Jan',
+      'Feb',
+      'Mar',
+      'Apr',
+      'Mei',
+      'Jun',
+      'Jul',
+      'Agu',
+      'Sep',
+      'Okt',
+      'Nov',
+      'Des',
+    ];
+    final local = date.toLocal();
+    return '${local.day} ${months[local.month - 1]} ${local.year}';
+  }
+
+  Widget _practicalInfoSection(Destination destination, bool isAdmin) {
+    return Container(
+      margin: const EdgeInsets.only(bottom: 12),
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(8),
+        boxShadow: softShadow(),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              const Expanded(
+                child: Text(
+                  'Informasi Praktis',
+                  style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700),
+                ),
+              ),
+              if (isAdmin)
+                TextButton.icon(
+                  onPressed: () => _editPracticalInfo(destination),
+                  icon: const Icon(Icons.edit_outlined, size: 18),
+                  label: const Text('Edit'),
+                ),
+            ],
+          ),
+          _practicalInfoItem(
+            Icons.schedule,
+            'Jam operasional',
+            destination.openingHours,
+          ),
+          _practicalInfoItem(
+            Icons.confirmation_num_outlined,
+            'Harga tiket',
+            destination.ticketPrice,
+          ),
+          _practicalInfoItem(
+            Icons.miscellaneous_services_outlined,
+            'Fasilitas',
+            destination.facilities,
+          ),
+          _practicalInfoItem(
+            Icons.phone_outlined,
+            'Kontak pengelola',
+            destination.contact,
+          ),
+          _practicalInfoItem(
+            Icons.description_outlined,
+            'No. SK Bupati',
+            destination.noSkBupati,
+          ),
+          const SizedBox(height: 12),
+          Text(
+            'Terakhir diperbarui: '
+            '${_formatPracticalInfoDate(destination.practicalInfoUpdatedAt)}',
+            style: const TextStyle(fontSize: 11, color: AppColors.muted),
+          ),
+        ],
+      ),
+    );
   }
 
   /// Siapkan audio/video untuk destinasi yang sedang tampil.
@@ -421,9 +662,18 @@ class _DetailScreenState extends State<DetailScreen> {
     if (!_requireLogin()) return;
     if (!mounted) return;
     final d = _dest;
+    final confirmed = await showConfirmationDialog(
+      context: context,
+      title: 'Buka Google Maps?',
+      message: 'Lihat lokasi ${d.name} di Google Maps?',
+    );
+    if (!confirmed || !mounted) return;
+
     final opened = await launchUrl(
       googleMapsLocationUri(d),
-      mode: LaunchMode.externalApplication,
+      mode:
+          kIsWeb ? LaunchMode.platformDefault : LaunchMode.externalApplication,
+      webOnlyWindowName: '_blank',
     );
     if (!opened && mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -435,7 +685,18 @@ class _DetailScreenState extends State<DetailScreen> {
   Future<void> _toggleFavorite() async {
     if (!_requireLogin()) return;
     if (!mounted) return;
-    await context.read<AppState>().toggleFavorite(_dest.id);
+    final destination = _dest;
+    final isFavorite =
+        context.read<AppState>().favoriteIds.contains(destination.id);
+    final confirmed = await showConfirmationDialog(
+      context: context,
+      title: isFavorite ? 'Hapus dari favorit?' : 'Tambah ke favorit?',
+      message: isFavorite
+          ? 'Hapus ${destination.name} dari daftar favorit?'
+          : 'Tambahkan ${destination.name} ke daftar favorit?',
+    );
+    if (!confirmed || !mounted) return;
+    await context.read<AppState>().toggleFavorite(destination.id);
   }
 
   Widget _media(Destination d) {
@@ -478,12 +739,15 @@ class _DetailScreenState extends State<DetailScreen> {
         ],
       );
     }
-    return DestinationImage(
-      url: d.imageUrl,
-      fallbackAsset: d.imageAsset,
-      height: 201,
-      width: double.infinity,
-      radius: 4,
+    return Hero(
+      tag: 'destination-image-${d.id}',
+      child: DestinationImage(
+        url: d.imageUrl,
+        fallbackAsset: d.imageAsset,
+        height: 201,
+        width: double.infinity,
+        radius: 4,
+      ),
     );
   }
 
@@ -619,6 +883,8 @@ class _DetailScreenState extends State<DetailScreen> {
             _textSection('Deskripsi', d.description),
           if (d.history.trim().isNotEmpty)
             _textSection('Cerita / Sejarah', d.history),
+          _practicalInfoSection(d, state.isContentAdmin),
+          DestinationRatingSection(destination: d),
           const CopyrightFooter(),
         ],
       ),

@@ -7,6 +7,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import '../db/database_helper.dart';
 import '../models/app_user.dart';
 import '../models/destination.dart';
+import '../models/destination_review.dart';
 import '../services/supabase_service.dart';
 import '../utils/password_policy.dart';
 
@@ -18,6 +19,14 @@ class AppState extends ChangeNotifier {
     'Cagar Budaya',
     'Warisan Budaya Tak Benda',
   };
+  static const naturalFeatureCategories = {
+    'Gunung',
+    'Danau',
+    'Kawah',
+    'Laut',
+    'Air Terjun',
+    'Lubuk',
+  };
 
   bool ready = false;
   bool supabaseReady = false;
@@ -25,20 +34,67 @@ class AppState extends ChangeNotifier {
   String? serviceMessage;
   AppUser? user;
   List<Destination> _all = [];
+  Map<int, int> _destinationSearchCounts = {};
+  Map<int, (double, int)> _destinationRatingStats = {};
+  final Map<int, List<DestinationReview>> _destinationReviews = {};
+  final Map<int, DestinationReview> _myDestinationReviews = {};
   Set<int> favoriteIds = {};
   String category = 'Semua';
   String? cultureType;
+  String? natureType;
   String query = '';
+  int? lastCreatedDestinationId;
 
   List<Destination> get allDestinations => _all;
-  List<Destination> get destinations => _filter(_all);
-  List<Destination> get favorites =>
-      _filter(_all.where((d) => favoriteIds.contains(d.id)).toList());
+  List<Destination> get popularDestinations => _sortBySearchCount(_all);
+  List<Destination> get destinations => _filter(popularDestinations);
+  List<Destination> get favorites => _filter(_sortBySearchCount(
+      _all.where((d) => favoriteIds.contains(d.id)).toList()));
+  bool get hasSearchStatistics =>
+      _destinationSearchCounts.values.any((count) => count > 0);
+  List<Destination> get mostSearchedDestinations => _sortBySearchCount(
+        _all
+            .where((destination) =>
+                (_destinationSearchCounts[destination.id] ?? 0) > 0)
+            .toList(),
+      );
+  int searchCountFor(int destinationId) =>
+      _destinationSearchCounts[destinationId] ?? 0;
+  Map<int, (double, int)> get destinationRatingStats =>
+      Map.unmodifiable(_destinationRatingStats);
+  (double, int) ratingFor(int destinationId) =>
+      _destinationRatingStats[destinationId] ?? (0, 0);
+  List<DestinationReview> reviewsFor(int destinationId) =>
+      _destinationReviews[destinationId] ?? const [];
+  DestinationReview? myReviewFor(int destinationId) =>
+      _myDestinationReviews[destinationId];
+  String? get currentAuthUserId => _supabase.currentUid;
+  bool get canSubmitCloudReview =>
+      supabaseReady && _supabase.currentUid != null;
+
+  List<Destination> _sortBySearchCount(List<Destination> destinations) {
+    final sorted = List<Destination>.of(destinations);
+    sorted.sort((a, b) {
+      final bySearchCount = (_destinationSearchCounts[b.id] ?? 0)
+          .compareTo(_destinationSearchCounts[a.id] ?? 0);
+      return bySearchCount != 0 ? bySearchCount : a.id.compareTo(b.id);
+    });
+    return sorted;
+  }
+
   List<String> get categories {
     final available = _all.map((d) => d.category).toSet();
     final categories = available
-        .where((c) => !culturalHeritageCategories.contains(c) && c != 'Budaya')
+        .where((c) =>
+            !culturalHeritageCategories.contains(c) &&
+            !naturalFeatureCategories.contains(c) &&
+            c != 'Budaya' &&
+            c != 'Alam')
         .toSet();
+    if (available.contains('Alam') ||
+        available.any(naturalFeatureCategories.contains)) {
+      categories.add('Alam');
+    }
     if (available.any(culturalHeritageCategories.contains) ||
         available.contains('Budaya')) {
       categories.add('Budaya');
@@ -59,6 +115,12 @@ class AppState extends ChangeNotifier {
             !(cultureType == 'Cagar Budaya' && d.category == 'Budaya')) {
           return false;
         }
+      } else if (category == 'Alam') {
+        if (d.category != 'Alam' &&
+            !naturalFeatureCategories.contains(d.category)) {
+          return false;
+        }
+        if (natureType != null && d.category != natureType) return false;
       } else if (category != 'Semua' && d.category != category) {
         return false;
       }
@@ -77,8 +139,24 @@ class AppState extends ChangeNotifier {
       try {
         final remoteDestinations = await _supabase.getDestinations();
         if (remoteDestinations.isNotEmpty) {
-          _all = remoteDestinations;
-          await _db.cacheDestinations(remoteDestinations);
+          final localImageAssets = {
+            for (final destination in _all)
+              if (destination.imageAsset.isNotEmpty)
+                destination.name: destination.imageAsset,
+          };
+          _all = remoteDestinations.map((destination) {
+            var d = destination.imageAsset.isEmpty &&
+                    localImageAssets.containsKey(destination.name)
+                ? destination.copyWith(
+                    imageAsset: localImageAssets[destination.name])
+                : destination;
+            final override = DatabaseHelper.activeCoordinates[d.name];
+            if (override != null) {
+              d = d.copyWith(latitude: override.$1, longitude: override.$2);
+            }
+            return d;
+          }).toList();
+          await _db.cacheDestinations(_all);
         }
       } on PostgrestException catch (error) {
         serviceMessage = 'Gagal memuat destinasi Supabase: ${error.message}';
@@ -89,6 +167,27 @@ class AppState extends ChangeNotifier {
       serviceMessage = _supabase.initializationError;
     }
 
+    if (supabaseReady) {
+      try {
+        _destinationSearchCounts = await _supabase.getDestinationSearchCounts();
+      } on PostgrestException catch (error) {
+        serviceMessage =
+            'Gagal memuat jumlah pencarian destinasi: ${error.message}';
+      } on Exception catch (error) {
+        serviceMessage = 'Gagal memuat jumlah pencarian destinasi: $error';
+      }
+    }
+
+    if (supabaseReady) {
+      try {
+        _destinationRatingStats = await _supabase.getDestinationRatingStats();
+      } on PostgrestException catch (error) {
+        serviceMessage = 'Gagal memuat rating destinasi: ${error.message}';
+      } on Exception catch (error) {
+        serviceMessage = 'Gagal memuat rating destinasi: $error';
+      }
+    }
+
     final prefs = await SharedPreferences.getInstance();
     final authUser = _supabase.currentUser;
     if (supabaseReady && authUser != null) {
@@ -96,6 +195,7 @@ class AppState extends ChangeNotifier {
         authUid: authUser.id,
         name: _supabaseName(authUser),
         email: authUser.email ?? '',
+        avatarUrl: _supabaseAvatarUrl(authUser),
       );
       await prefs.setInt('user_id', user!.id);
       favoriteIds = await _db.getFavoriteIds(user!.id);
@@ -117,11 +217,19 @@ class AppState extends ChangeNotifier {
     return authUser.email?.split('@').first ?? 'Pengguna';
   }
 
+  String? _supabaseAvatarUrl(User authUser) {
+    final avatarUrl = authUser.userMetadata?['avatar_url'];
+    return avatarUrl is String && avatarUrl.trim().isNotEmpty
+        ? avatarUrl.trim()
+        : null;
+  }
+
   Future<void> _startSession(AppUser appUser) async {
     user = appUser;
     favoriteIds = await _db.getFavoriteIds(appUser.id);
     category = 'Semua';
     cultureType = null;
+    natureType = null;
     query = '';
     final prefs = await SharedPreferences.getInstance();
     await prefs.setInt('user_id', appUser.id);
@@ -341,6 +449,7 @@ class AppState extends ChangeNotifier {
       authUid: authUser.id,
       name: name,
       email: authUser.email ?? '',
+      avatarUrl: _supabaseAvatarUrl(authUser),
     );
     await _startSession(appUser);
     await _refreshAdminStatus();
@@ -381,12 +490,7 @@ class AppState extends ChangeNotifier {
     if (currentUser == null) return;
     final normalizedName = name.trim();
     await _db.updateName(currentUser.id, normalizedName);
-    user = AppUser(
-      id: currentUser.id,
-      name: normalizedName,
-      email: currentUser.email,
-      authUid: currentUser.authUid,
-    );
+    user = currentUser.copyWith(name: normalizedName);
     final authUser = _supabase.currentUser;
     if (authUser != null && currentUser.authUid == authUser.id) {
       try {
@@ -402,6 +506,48 @@ class AppState extends ChangeNotifier {
         _saveSupabaseProfile(authUser, normalizedName, 'profile_updated'),
       );
     }
+    notifyListeners();
+  }
+
+  Future<void> updateProfilePhoto({
+    required Uint8List bytes,
+    required String contentType,
+  }) async {
+    final currentUser = user;
+    if (currentUser == null) {
+      throw StateError('Masuk ke akun terlebih dahulu untuk mengubah foto.');
+    }
+
+    final authUser = _supabase.currentUser;
+    if (currentUser.authUid == null ||
+        authUser == null ||
+        currentUser.authUid != authUser.id) {
+      await _db.updateProfilePhoto(currentUser.id, bytes);
+      user = currentUser.copyWith(
+        avatarBytes: bytes,
+        clearAvatarUrl: true,
+      );
+      serviceMessage =
+          'Foto tersimpan di perangkat ini dan belum disinkronkan ke cloud.';
+      notifyListeners();
+      return;
+    }
+
+    final avatarUrl = await _supabase.uploadProfileAvatar(
+      userId: authUser.id,
+      bytes: bytes,
+      contentType: contentType,
+    );
+    await _supabase.client.auth.updateUser(
+      UserAttributes(data: {'avatar_url': avatarUrl}),
+    );
+
+    await _db.updateProfilePhoto(currentUser.id, bytes);
+    user = currentUser.copyWith(
+      avatarUrl: avatarUrl,
+      avatarBytes: bytes,
+    );
+    serviceMessage = null;
     notifyListeners();
   }
 
@@ -458,14 +604,368 @@ class AppState extends ChangeNotifier {
     notifyListeners();
   }
 
+  void _requireDestinationAdmin() {
+    if (!supabaseReady || !isContentAdmin) {
+      throw Exception('Akun ini tidak memiliki izin mengelola destinasi.');
+    }
+  }
+
+  void _validateDestinationName(String name, {int? excludingId}) {
+    final normalizedName = name.trim().toLowerCase();
+    if (_all.any((destination) =>
+        destination.id != excludingId &&
+        destination.name.trim().toLowerCase() == normalizedName)) {
+      throw Exception('Nama destinasi tersebut sudah digunakan.');
+    }
+  }
+
+  Future<Destination> createDestination(
+    Destination draft, {
+    Uint8List? imageBytes,
+    String? imageFileName,
+    Uint8List? videoBytes,
+    String? videoFileName,
+  }) async {
+    _requireDestinationAdmin();
+    _validateDestinationName(draft.name);
+    if ((imageBytes == null) != (imageFileName == null) ||
+        (videoBytes == null) != (videoFileName == null)) {
+      throw const FormatException('Data media destinasi tidak lengkap.');
+    }
+
+    final created = await _supabase.createDestination(draft);
+    final uploadedMedia = <(String, String)>[];
+    try {
+      var saved = created;
+      if (imageBytes != null && imageFileName != null) {
+        final url = await _supabase.uploadDestinationImage(
+          destinationId: created.id,
+          fileName: imageFileName,
+          bytes: imageBytes,
+        );
+        uploadedMedia.add((SupabaseService.imageBucket, url));
+        saved = saved.copyWith(imageUrl: url);
+      }
+      if (videoBytes != null && videoFileName != null) {
+        final url = await _supabase.uploadDestinationVideo(
+          destinationId: created.id,
+          fileName: videoFileName,
+          bytes: videoBytes,
+        );
+        uploadedMedia.add((SupabaseService.videoBucket, url));
+        saved = saved.copyWith(videoUrl: url);
+      }
+      if (saved.imageUrl != created.imageUrl ||
+          saved.videoUrl != created.videoUrl) {
+        await _supabase.updateDestination(saved);
+      }
+      await _db.cacheDestinations([saved]);
+      _all = [..._all, saved];
+      category = 'Semua';
+      cultureType = null;
+      natureType = null;
+      query = '';
+      lastCreatedDestinationId = saved.id;
+      serviceMessage = null;
+      notifyListeners();
+      return saved;
+    } on Exception catch (error) {
+      final cleanupErrors = <String>[];
+      for (final media in uploadedMedia) {
+        try {
+          await _supabase.deleteDestinationMedia(
+            bucket: media.$1,
+            url: media.$2,
+          );
+        } on Exception catch (cleanupError) {
+          cleanupErrors.add(cleanupError.toString());
+        }
+      }
+      try {
+        await _supabase.deleteDestination(created.id);
+      } on Exception catch (cleanupError) {
+        cleanupErrors.add(cleanupError.toString());
+      }
+      if (cleanupErrors.isNotEmpty) {
+        throw StateError(
+          'Pembuatan destinasi gagal: $error. '
+          'Pembersihan data sementara juga gagal: ${cleanupErrors.join('; ')}',
+        );
+      }
+      rethrow;
+    }
+  }
+
+  Future<void> updateDestination(
+    Destination updated, {
+    Uint8List? imageBytes,
+    String? imageFileName,
+    Uint8List? videoBytes,
+    String? videoFileName,
+    bool removeImage = false,
+    bool removeVideo = false,
+  }) async {
+    _requireDestinationAdmin();
+    _validateDestinationName(updated.name, excludingId: updated.id);
+    if ((imageBytes == null) != (imageFileName == null) ||
+        (videoBytes == null) != (videoFileName == null)) {
+      throw const FormatException('Data media destinasi tidak lengkap.');
+    }
+
+    final previousIndex =
+        _all.indexWhere((destination) => destination.id == updated.id);
+    if (previousIndex < 0) throw Exception('Destinasi tidak ditemukan.');
+    final previous = _all[previousIndex];
+    var saved = updated;
+    final uploadedMedia = <(String, String)>[];
+    try {
+      if (removeImage) {
+        saved = saved.copyWith(imageUrl: '', imageAsset: '');
+      } else if (imageBytes != null && imageFileName != null) {
+        final url = await _supabase.uploadDestinationImage(
+          destinationId: updated.id,
+          fileName: imageFileName,
+          bytes: imageBytes,
+        );
+        uploadedMedia.add((SupabaseService.imageBucket, url));
+        saved = saved.copyWith(imageUrl: url, imageAsset: '');
+      }
+      if (removeVideo) {
+        saved = saved.copyWith(videoUrl: '', videoAsset: '');
+      } else if (videoBytes != null && videoFileName != null) {
+        final url = await _supabase.uploadDestinationVideo(
+          destinationId: updated.id,
+          fileName: videoFileName,
+          bytes: videoBytes,
+        );
+        uploadedMedia.add((SupabaseService.videoBucket, url));
+        saved = saved.copyWith(videoUrl: url, videoAsset: '');
+      }
+      await _supabase.updateDestination(saved);
+    } on Exception catch (error) {
+      final cleanupErrors = <String>[];
+      for (final media in uploadedMedia) {
+        try {
+          await _supabase.deleteDestinationMedia(
+            bucket: media.$1,
+            url: media.$2,
+          );
+        } on Exception catch (cleanupError) {
+          cleanupErrors.add(cleanupError.toString());
+        }
+      }
+      if (cleanupErrors.isNotEmpty) {
+        throw StateError(
+          'Pembaruan destinasi gagal: $error. '
+          'Pembersihan media sementara juga gagal: ${cleanupErrors.join('; ')}',
+        );
+      }
+      rethrow;
+    }
+
+    await _db.cacheDestinations([saved]);
+    final index = _all.indexWhere((destination) => destination.id == saved.id);
+    if (index < 0) {
+      _all = [..._all, saved];
+    } else {
+      _all[index] = saved;
+    }
+
+    final cleanupErrors = <String>[];
+    if (previous.imageUrl.isNotEmpty && previous.imageUrl != saved.imageUrl) {
+      try {
+        await _supabase.deleteDestinationMedia(
+          bucket: SupabaseService.imageBucket,
+          url: previous.imageUrl,
+        );
+      } on Exception catch (error) {
+        cleanupErrors.add(error.toString());
+      }
+    }
+    if (previous.videoUrl.isNotEmpty && previous.videoUrl != saved.videoUrl) {
+      try {
+        await _supabase.deleteDestinationMedia(
+          bucket: SupabaseService.videoBucket,
+          url: previous.videoUrl,
+        );
+      } on Exception catch (error) {
+        cleanupErrors.add(error.toString());
+      }
+    }
+    serviceMessage = cleanupErrors.isEmpty
+        ? null
+        : 'Destinasi disimpan, tetapi media lama gagal dibersihkan: '
+            '${cleanupErrors.join('; ')}';
+    notifyListeners();
+  }
+
+  Future<void> deleteDestination(int id) async {
+    _requireDestinationAdmin();
+    final index = _all.indexWhere((destination) => destination.id == id);
+    if (index < 0) throw Exception('Destinasi tidak ditemukan.');
+    final destination = _all[index];
+
+    await _supabase.deleteDestination(id);
+    await _db.deleteDestination(id);
+    _all = _all.where((item) => item.id != id).toList();
+    favoriteIds = {...favoriteIds}..remove(id);
+
+    final cleanupErrors = <String>[];
+    for (final media in [
+      (SupabaseService.imageBucket, destination.imageUrl),
+      (SupabaseService.videoBucket, destination.videoUrl),
+    ]) {
+      if (media.$2.isEmpty) continue;
+      try {
+        await _supabase.deleteDestinationMedia(
+          bucket: media.$1,
+          url: media.$2,
+        );
+      } on Exception catch (error) {
+        cleanupErrors.add(error.toString());
+      }
+    }
+    serviceMessage = cleanupErrors.isEmpty
+        ? null
+        : 'Destinasi terhapus, tetapi media lama gagal dibersihkan: '
+            '${cleanupErrors.join('; ')}';
+    notifyListeners();
+  }
+
+  Future<void> updateDestinationPracticalInfo({
+    required int destinationId,
+    required String openingHours,
+    required String ticketPrice,
+    required String facilities,
+    required String contact,
+    required String noSkBupati,
+  }) async {
+    if (!supabaseReady || !isContentAdmin) {
+      throw StateError('Akun ini tidak memiliki izin mengelola destinasi.');
+    }
+    final index =
+        _all.indexWhere((destination) => destination.id == destinationId);
+    if (index == -1) {
+      throw StateError('Destinasi tidak ditemukan.');
+    }
+
+    final updated = _all[index].copyWith(
+      openingHours: openingHours.trim(),
+      ticketPrice: ticketPrice.trim(),
+      facilities: facilities.trim(),
+      contact: contact.trim(),
+      noSkBupati: noSkBupati.trim(),
+      practicalInfoUpdatedAt: DateTime.now().toUtc(),
+    );
+    await _supabase.updateDestinationPracticalInfo(updated);
+    await _db.cacheDestinations([updated]);
+    _all[index] = updated;
+    notifyListeners();
+  }
+
+  Future<void> recordDestinationSearch(int destinationId) async {
+    if (!supabaseReady) return;
+    final searchCount = await _supabase.recordDestinationSearch(destinationId);
+    _destinationSearchCounts[destinationId] = searchCount;
+    notifyListeners();
+  }
+
+  Future<void> loadDestinationReviews(int destinationId) async {
+    if (!supabaseReady) return;
+    final reviews = await _supabase.getDestinationReviews(destinationId);
+    _destinationReviews[destinationId] = reviews;
+    final userId = _supabase.currentUid;
+    if (userId != null) {
+      final myReview = await _supabase.getUserDestinationReview(
+        destinationId: destinationId,
+        userId: userId,
+      );
+      if (myReview == null) {
+        _myDestinationReviews.remove(destinationId);
+      } else {
+        _myDestinationReviews[destinationId] = myReview;
+      }
+    }
+    notifyListeners();
+  }
+
+  Future<void> submitDestinationReview({
+    required int destinationId,
+    required int rating,
+    required String review,
+  }) async {
+    final userId = _supabase.currentUid;
+    if (!supabaseReady || userId == null) {
+      throw StateError('Masuk dengan akun online untuk memberi rating.');
+    }
+    if (rating < 1 || rating > 5) {
+      throw ArgumentError.value(rating, 'rating', 'Harus antara 1 dan 5.');
+    }
+    if (review.trim().length > 1000) {
+      throw ArgumentError.value(
+        review.length,
+        'review',
+        'Ulasan maksimal 1000 karakter.',
+      );
+    }
+
+    final savedReview = await _supabase.upsertDestinationReview(
+      userId: userId,
+      destinationId: destinationId,
+      rating: rating,
+      review: review.trim(),
+    );
+    _myDestinationReviews[destinationId] = savedReview;
+    _destinationReviews.remove(destinationId);
+    _destinationRatingStats = await _supabase.getDestinationRatingStats();
+    _destinationReviews[destinationId] =
+        await _supabase.getDestinationReviews(destinationId);
+    notifyListeners();
+  }
+
+  Future<void> deleteDestinationReview(int destinationId) async {
+    final userId = _supabase.currentUid;
+    if (!supabaseReady || userId == null) {
+      throw StateError('Masuk dengan akun online untuk menghapus ulasan.');
+    }
+
+    await _supabase.deleteDestinationReview(
+      destinationId: destinationId,
+      userId: userId,
+    );
+    _myDestinationReviews.remove(destinationId);
+    _destinationReviews[destinationId] = [
+      for (final review in _destinationReviews[destinationId] ?? const [])
+        if (review.userId != userId) review,
+    ];
+    notifyListeners();
+
+    try {
+      _destinationRatingStats = await _supabase.getDestinationRatingStats();
+      _destinationReviews[destinationId] =
+          await _supabase.getDestinationReviews(destinationId);
+      notifyListeners();
+    } on Exception catch (error) {
+      throw StateError(
+        'Ulasan sudah dihapus, tetapi ringkasan belum berhasil diperbarui: $error',
+      );
+    }
+  }
+
   void setCategory(String value) {
     category = value;
     cultureType = null;
+    natureType = null;
     notifyListeners();
   }
 
   void setCultureType(String? type) {
     cultureType = type;
+    notifyListeners();
+  }
+
+  void setNatureType(String? type) {
+    natureType = type;
     notifyListeners();
   }
 

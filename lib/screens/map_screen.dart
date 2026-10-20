@@ -1,8 +1,7 @@
+import 'dart:async';
 import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter_map/flutter_map.dart';
-import 'package:latlong2/latlong.dart';
 import 'package:provider/provider.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:webview_flutter/webview_flutter.dart';
@@ -10,33 +9,40 @@ import 'package:webview_flutter/webview_flutter.dart';
 import '../models/destination.dart';
 import '../providers/app_state.dart';
 import '../theme.dart';
+import '../utils/confirmation_dialog.dart';
 import '../utils/google_maps_route.dart';
 import '../widgets/category_chips.dart';
 import '../widgets/copyright_footer.dart';
 import '../widgets/destination_card.dart';
 import '../widgets/maplibre_3d_web_stub.dart'
     if (dart.library.html) '../widgets/maplibre_3d_web.dart';
+import 'package:pointer_interceptor/pointer_interceptor.dart';
 import 'home_screen.dart';
 
 class MapScreen extends StatefulWidget {
-  const MapScreen({super.key});
+  final bool isActive;
+
+  const MapScreen({super.key, this.isActive = true});
 
   @override
   State<MapScreen> createState() => _MapScreenState();
 }
 
 class _MapScreenState extends State<MapScreen> {
-  final MapController _controller = MapController();
   final DraggableScrollableController _sheetController =
       DraggableScrollableController();
   WebViewController? _webViewController;
+  AppState? _observedAppState;
   int? _selectedId;
-  bool _is3DMode = true;
-  bool _isWebViewReady = false;
+  int? _lastFocusedCreatedDestinationId;
+  int? _lastObservedCreatedDestinationId;
+  String? _lastSearchFocusKey;
+  String? _lastObservedQuery;
+  Timer? _syncDebounce;
+  bool _isMapStyleReady = false;
+  bool _isConfirmationOpen = false;
   final String _webMapChannel =
       'guriang-map-${DateTime.now().microsecondsSinceEpoch}';
-
-  static const _garut = LatLng(-7.2, 107.85);
 
   @override
   void initState() {
@@ -45,15 +51,87 @@ class _MapScreenState extends State<MapScreen> {
   }
 
   @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    final state = context.read<AppState>();
+    if (identical(state, _observedAppState)) return;
+    _observedAppState?.removeListener(_handleAppStateChanged);
+    _observedAppState = state;
+    _lastObservedQuery = state.query.trim();
+    _lastObservedCreatedDestinationId = state.lastCreatedDestinationId;
+    _lastFocusedCreatedDestinationId = state.lastCreatedDestinationId;
+    state.addListener(_handleAppStateChanged);
+  }
+
+  @override
   void dispose() {
+    _observedAppState?.removeListener(_handleAppStateChanged);
+    _syncDebounce?.cancel();
     _sheetController.dispose();
     super.dispose();
   }
 
-  Future<void> _expandCultureSheet() async {
+  @override
+  void didUpdateWidget(covariant MapScreen oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.isActive && !oldWidget.isActive) {
+      if (kIsWeb) {
+        setState(() {});
+      } else {
+        unawaited(_sync3DMap(forceFocus: true));
+      }
+    }
+  }
+
+  void _handleAppStateChanged() {
+    final state = _observedAppState;
+    if (state == null || !mounted) return;
+
+    final query = state.query.trim();
+    if (query != _lastObservedQuery) {
+      _lastObservedQuery = query;
+      _selectedId = null;
+      _lastSearchFocusKey = null;
+    }
+
+    final createdId = state.lastCreatedDestinationId;
+    final isNewlyCreated =
+        createdId != null && createdId != _lastObservedCreatedDestinationId;
+    _lastObservedCreatedDestinationId = createdId;
+    if (isNewlyCreated &&
+        state.allDestinations
+            .any((destination) => destination.id == createdId)) {
+      setState(() => _selectedId = createdId);
+      if (kIsWeb) {
+        _lastFocusedCreatedDestinationId = createdId;
+      } else if (_isMapStyleReady && _webViewController != null) {
+        unawaited(_sync3DMap());
+      }
+      return;
+    }
+
+    if (_isMapStyleReady && _webViewController != null) {
+      _syncDebounce?.cancel();
+      _syncDebounce = Timer(const Duration(milliseconds: 600), () {
+        if (mounted) unawaited(_sync3DMap());
+      });
+    }
+  }
+
+  Future<void> _expandCategorySheet() async {
     if (!_sheetController.isAttached) return;
     await _sheetController.animateTo(
       0.65,
+      duration: const Duration(milliseconds: 250),
+      curve: Curves.easeOut,
+    );
+  }
+
+  Future<void> _toggleSheet() async {
+    if (!_sheetController.isAttached) return;
+    final isExpanded = _sheetController.size > 0.35;
+    await _sheetController.animateTo(
+      isExpanded ? (kIsWeb ? 0.30 : 0.23) : 0.65,
       duration: const Duration(milliseconds: 250),
       curve: Curves.easeOut,
     );
@@ -78,52 +156,146 @@ class _MapScreenState extends State<MapScreen> {
           }
         },
       )
-      ..setNavigationDelegate(
-        NavigationDelegate(
-          onPageFinished: (_) {
-            setState(() => _isWebViewReady = true);
-            _update3DMarkers();
-          },
-        ),
+      ..addJavaScriptChannel(
+        'MapReady',
+        onMessageReceived: (message) {
+          if (message.message != 'ready' || _isMapStyleReady) return;
+          setState(() => _isMapStyleReady = true);
+          unawaited(_sync3DMap());
+        },
       )
       ..loadHtmlString(_buildCesium3DHtml());
   }
 
-  void _update3DMarkers() {
-    if (!_isWebViewReady || _webViewController == null) return;
+  Future<void> _sync3DMap({bool forceFocus = false}) async {
+    if (!_isMapStyleReady || _webViewController == null) return;
     final state = context.read<AppState>();
-    final dests = state.destinations
-        .map((d) => {
-              'id': d.id,
-              'name': d.name,
-              'category': d.category,
-              'lat': d.latitude,
-              'lng': d.longitude,
-              'isCulture': _isCultureCategory(d.category),
-            })
-        .toList();
+    final query = state.query.trim();
+    final target = _mapFocusTarget(state, state.destinations);
+    final dests = _mapDestinations(
+      _destinationsForMap(state.destinations, target),
+      selectedId: target?.id,
+    );
 
     final jsonStr = jsonEncode(dests);
-    _webViewController!.runJavaScript('updateDestinations($jsonStr);');
+    await _webViewController!.runJavaScript('updateDestinations($jsonStr);');
+
+    if (query.isNotEmpty) {
+      if (target == null) return;
+      final focusKey = '$query:${target.id}';
+      if (!forceFocus && focusKey == _lastSearchFocusKey) return;
+      await _webViewController!.runJavaScript(
+        'focusDestination(${target.latitude}, ${target.longitude});',
+      );
+      _lastSearchFocusKey = focusKey;
+      return;
+    }
+
+    _lastSearchFocusKey = null;
+    final createdId = state.lastCreatedDestinationId;
+    if (createdId != null && createdId != _lastFocusedCreatedDestinationId) {
+      Destination? created;
+      for (final destination in state.allDestinations) {
+        if (destination.id == createdId) {
+          created = destination;
+          break;
+        }
+      }
+      if (created != null) {
+        await _webViewController!.runJavaScript(
+          'focusDestination(${created.latitude}, ${created.longitude});',
+        );
+        _lastFocusedCreatedDestinationId = createdId;
+        return;
+      }
+    }
   }
 
   void _select(Destination d) {
     setState(() => _selectedId = d.id);
-    if (_is3DMode && _webViewController != null) {
-      _webViewController!
-          .runJavaScript('flyToDestination(${d.latitude}, ${d.longitude});');
-    } else {
-      _controller.move(LatLng(d.latitude, d.longitude), 13);
+    if (context.read<AppState>().query.trim().isNotEmpty) {
+      _lastSearchFocusKey = '${context.read<AppState>().query.trim()}:${d.id}';
     }
+    _webViewController?.runJavaScript(
+      'focusDestination(${d.latitude}, ${d.longitude});',
+    );
+  }
+
+  Destination? _mapFocusTarget(AppState state, List<Destination> destinations) {
+    final query = state.query.trim().toLowerCase();
+    if (query.isNotEmpty) {
+      final all = state.allDestinations;
+      for (final destination in all) {
+        if (destination.name.trim().toLowerCase() == query) return destination;
+      }
+      for (final destination in all) {
+        final name = destination.name.trim().toLowerCase();
+        if (name.startsWith(query)) {
+          return destination;
+        }
+      }
+      for (final destination in all) {
+        if (destination.name.trim().toLowerCase().contains(query)) {
+          return destination;
+        }
+      }
+      for (final destination in all) {
+        if (destination.location.trim().toLowerCase().contains(query)) {
+          return destination;
+        }
+      }
+      return destinations.isEmpty ? null : destinations.first;
+    }
+    for (final destination in destinations) {
+      if (destination.id == _selectedId) return destination;
+    }
+    return null;
+  }
+
+  List<Destination> _destinationsForMap(
+    List<Destination> destinations,
+    Destination? target,
+  ) {
+    if (target == null ||
+        destinations.any((destination) => destination.id == target.id)) {
+      return destinations;
+    }
+    return [...destinations, target];
   }
 
   Future<void> _openDirections(Destination destination) async {
+    setState(() => _isConfirmationOpen = true);
+    final confirmed = await showConfirmationDialog(
+      context: context,
+      title: 'Buka Google Maps?',
+      message: 'Buka rute ke ${destination.name} di Google Maps?',
+    );
+    if (mounted) {
+      setState(() => _isConfirmationOpen = false);
+    }
+    if (!confirmed || !mounted) return;
+
     final uri = googleMapsDirectionsUri(destination);
-    final opened = await launchUrl(uri, mode: LaunchMode.externalApplication);
+    final opened = await launchUrl(
+      uri,
+      mode:
+          kIsWeb ? LaunchMode.platformDefault : LaunchMode.externalApplication,
+      webOnlyWindowName: '_blank',
+    );
     if (!opened && mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Google Maps tidak dapat dibuka.')),
       );
+    }
+  }
+
+  void _onWebMapMessage(int id) {
+    final destinations = context.read<AppState>().allDestinations;
+    for (final destination in destinations) {
+      if (destination.id == id) {
+        _openDirections(destination);
+        return;
+      }
     }
   }
 
@@ -132,7 +304,10 @@ class _MapScreenState extends State<MapScreen> {
       category == 'Cagar Budaya' ||
       category == 'Warisan Budaya Tak Benda';
 
-  List<Map<String, Object>> _mapDestinations(List<Destination> destinations) =>
+  List<Map<String, Object>> _mapDestinations(
+    List<Destination> destinations, {
+    int? selectedId,
+  }) =>
       destinations
           .map((d) => {
                 'id': d.id,
@@ -141,6 +316,7 @@ class _MapScreenState extends State<MapScreen> {
                 'lat': d.latitude,
                 'lng': d.longitude,
                 'isCulture': _isCultureCategory(d.category),
+                'isSelected': d.id == selectedId,
               })
           .toList();
 
@@ -207,6 +383,18 @@ class _MapScreenState extends State<MapScreen> {
       transform: scale(1.3);
       background: #e53935;
     }
+    .destination-marker.is-selected .custom-marker {
+      width: 42px;
+      height: 42px;
+      border: 3px solid #ffca28;
+      background: #e53935;
+      box-shadow: 0 0 0 8px rgba(255, 202, 40, 0.35), 0 4px 14px rgba(0,0,0,0.55);
+      font-size: 20px;
+    }
+    .destination-marker.is-selected .destination-label {
+      background: #e53935;
+      font-size: 13px;
+    }
     .badge-3d {
       position: absolute;
       top: 10px;
@@ -222,6 +410,50 @@ class _MapScreenState extends State<MapScreen> {
       border: 1px solid rgba(74, 222, 128, 0.3);
       pointer-events: none;
       z-index: 10;
+    }
+    .guriang-popup {
+      color: #0f172a;
+      padding: 4px;
+      font-family: inherit;
+      min-width: 170px;
+    }
+    .popup-title {
+      font-size: 13px;
+      font-weight: bold;
+      margin-bottom: 4px;
+      color: #1b5e20;
+    }
+    .popup-desc {
+      font-size: 11px;
+      color: #475569;
+      margin-bottom: 8px;
+      line-height: 1.3;
+    }
+    .popup-actions {
+      display: flex;
+      gap: 6px;
+      justify-content: flex-end;
+    }
+    .popup-actions button {
+      border: none;
+      padding: 5px 9px;
+      border-radius: 5px;
+      font-size: 11px;
+      cursor: pointer;
+      font-weight: 600;
+    }
+    .popup-btn-cancel {
+      background: #f1f5f9;
+      color: #475569;
+    }
+    .popup-btn-confirm {
+      background: #2e7d32;
+      color: white;
+    }
+    .maplibregl-popup-content {
+      border-radius: 10px;
+      box-shadow: 0 4px 14px rgba(0,0,0,0.25);
+      padding: 10px 12px;
     }
   </style>
 </head>
@@ -245,7 +477,8 @@ class _MapScreenState extends State<MapScreen> {
             type: 'raster-dem',
             tiles: ['https://s3.amazonaws.com/elevation-tiles-prod/terrarium/{z}/{x}/{y}.png'],
             encoding: 'terrarium',
-            tileSize: 256
+            tileSize: 256,
+            maxzoom: 15
           }
         },
         layers: [
@@ -278,6 +511,16 @@ class _MapScreenState extends State<MapScreen> {
     });
 
     let currentMarkers = [];
+    let pendingFocus = null;
+    let mapLoaded = false;
+    const natureEmojis = {
+      'Gunung': '🏔️',
+      'Danau': '🏞️',
+      'Kawah': '🌋',
+      'Laut': '🌊',
+      'Air Terjun': '💦',
+      'Lubuk': '💧'
+    };
 
     function updateDestinations(dests) {
       currentMarkers.forEach(m => m.remove());
@@ -285,7 +528,7 @@ class _MapScreenState extends State<MapScreen> {
 
       dests.forEach(d => {
         const el = document.createElement('div');
-        el.className = 'destination-marker';
+        el.className = 'destination-marker' + (d.isSelected ? ' is-selected' : '');
 
         const label = document.createElement('div');
         label.className = 'destination-label';
@@ -295,52 +538,120 @@ class _MapScreenState extends State<MapScreen> {
         const pin = document.createElement('div');
         pin.className = 'custom-marker ' +
           (d.isCulture ? 'culture-marker' : 'nature-marker');
-        pin.textContent = d.isCulture ? '🏛️' : '🌿';
+        pin.textContent = d.isCulture
+          ? '🏛️'
+          : (natureEmojis[d.category] || '🌿');
+        pin.title = d.category || (d.isCulture ? 'Budaya' : 'Alam');
         el.appendChild(pin);
 
-        el.onclick = () => {
+        function triggerOpenDirections(id) {
           if (window.MapBridge) {
-            MapBridge.postMessage(String(d.id));
-          } else {
-            const directions = new URL('https://www.google.com/maps/dir/');
-            directions.searchParams.set('api', '1');
-            directions.searchParams.set('destination', d.lat + ',' + d.lng);
-            directions.searchParams.set('travelmode', 'driving');
-            window.top.location.href = directions.toString();
+            MapBridge.postMessage(String(id));
           }
+          const msg = JSON.stringify({channel: '$channel', kind: 'destination', id: id});
+          try { window.parent.postMessage(msg, '*'); } catch(_) {}
+          try { window.top.postMessage(msg, '*'); } catch(_) {}
+        }
+
+        const popupContent = document.createElement('div');
+        popupContent.className = 'guriang-popup';
+        popupContent.innerHTML = `
+          <div class="popup-title">\${d.name}</div>
+          <div class="popup-desc">Buka rute destinasi ini di Google Maps?</div>
+          <div class="popup-actions">
+            <button class="popup-btn-cancel" id="btn-cancel-\${d.id}">Batal</button>
+            <button class="popup-btn-confirm" id="btn-confirm-\${d.id}">Ya, Buka</button>
+          </div>
+        `;
+
+        const popup = new maplibregl.Popup({ offset: 25, closeButton: false })
+          .setDOMContent(popupContent);
+
+        popup.on('open', () => {
+          const btnConfirm = document.getElementById('btn-confirm-' + d.id);
+          const btnCancel = document.getElementById('btn-cancel-' + d.id);
+          if (btnConfirm) {
+            btnConfirm.onclick = () => {
+              triggerOpenDirections(d.id);
+              popup.remove();
+            };
+          }
+          if (btnCancel) {
+            btnCancel.onclick = () => {
+              popup.remove();
+            };
+          }
+        });
+
+        el.onclick = (e) => {
+          e.stopPropagation();
+          triggerOpenDirections(d.id);
         };
 
         const marker = new maplibregl.Marker({ element: el, anchor: 'bottom' })
           .setLngLat([d.lng, d.lat])
+          .setPopup(popup)
           .addTo(map);
 
         currentMarkers.push(marker);
       });
     }
 
-    function flyToDestination(lat, lng) {
+    function focusDestination(lat, lng, focusKey) {
+      if (!Number.isFinite(lat) || !Number.isFinite(lng)) return;
+      if (!mapLoaded) {
+        pendingFocus = { latitude: lat, longitude: lng, focusKey };
+        return false;
+      }
+      pendingFocus = null;
+      map.stop();
+      map.resize();
       map.flyTo({
         center: [lng, lat],
-        zoom: 13.5,
-        pitch: 65,
-        bearing: 25,
-        duration: 2500,
+        zoom: 16.5,
+        pitch: 0,
+        bearing: 0,
+        curve: 1.9,
+        offset: [0, -map.getContainer().clientHeight * 0.12],
+        duration: 3200,
+        easing: t => t * (2 - t),
         essential: true
       });
+      window.lastFocusKey = focusKey;
+      window.parent.postMessage(
+        JSON.stringify({
+          channel: webChannel,
+          kind: 'stateApplied',
+          focusKey
+        }),
+        '*'
+      );
+      return true;
     }
+
+    map.on('load', () => {
+      mapLoaded = true;
+      if (pendingFocus) {
+        const focus = pendingFocus;
+        focusDestination(focus.latitude, focus.longitude, focus.focusKey);
+      }
+      if (window.MapReady) MapReady.postMessage('ready');
+    });
 
     const webChannel = '$channel';
     const initialDestinations = $initialDestinationsJson;
+    new ResizeObserver(() => map.resize()).observe(document.getElementById('map'));
     if (webChannel) {
       map.on('load', () => {
         updateDestinations(initialDestinations);
         window.parent.postMessage(
           JSON.stringify({channel: webChannel, kind: 'ready'}),
-          window.location.origin
+          '*'
         );
       });
       window.addEventListener('message', event => {
-        if (event.source !== window.parent || typeof event.data !== 'string') return;
+        if (event.source !== window.parent ||
+            typeof event.data !== 'string') return;
         let message;
         try {
           message = JSON.parse(event.data);
@@ -349,10 +660,28 @@ class _MapScreenState extends State<MapScreen> {
         }
         if (message.channel !== webChannel) return;
         if (message.kind === 'state') {
-          updateDestinations(message.destinations);
-          if (message.latitude != null && message.longitude != null) {
-            flyToDestination(message.latitude, message.longitude);
+          const stateKey = JSON.stringify(message);
+          if (stateKey !== window.lastAppliedState) {
+            window.lastAppliedState = stateKey;
+            updateDestinations(message.destinations);
           }
+          if (message.latitude != null && message.longitude != null &&
+              message.focusKey !== window.lastFocusKey) {
+            map.stop();
+            map.resize();
+            if (!focusDestination(
+                message.latitude, message.longitude, message.focusKey)) {
+              return;
+            }
+          }
+          window.parent.postMessage(
+            JSON.stringify({
+              channel: webChannel,
+              kind: 'stateApplied',
+              focusKey: message.focusKey
+            }),
+            '*'
+          );
         }
       });
     }
@@ -366,142 +695,62 @@ class _MapScreenState extends State<MapScreen> {
   Widget build(BuildContext context) {
     final state = context.watch<AppState>();
     final list = state.destinations;
-    Destination? selected;
-    for (final destination in list) {
-      if (destination.id == _selectedId) {
-        selected = destination;
-        break;
-      }
-    }
-
-    // Sinkronkan marker 3D jika data berubah
-    if (_is3DMode && _isWebViewReady) {
-      _update3DMarkers();
-    }
+    final focusTarget = _mapFocusTarget(state, list);
+    final mapDestinations = _destinationsForMap(list, focusTarget);
 
     return Stack(
       children: [
         Positioned.fill(
-          child: _is3DMode
-              ? kIsWeb
-                  ? MapLibre3DWebView(
-                      key: ValueKey(_webMapChannel),
-                      channel: _webMapChannel,
-                      destinations: _mapDestinations(list),
-                      html: _buildCesium3DHtml(
-                        webChannel: _webMapChannel,
-                        initialDestinations: _mapDestinations(list),
+          child: kIsWeb
+              ? IgnorePointer(
+                  ignoring: _isConfirmationOpen,
+                  child: MapLibre3DWebView(
+                    key: ValueKey(_webMapChannel),
+                    channel: _webMapChannel,
+                    destinations: _mapDestinations(
+                      mapDestinations,
+                      selectedId: focusTarget?.id,
+                    ),
+                    html: _buildCesium3DHtml(
+                      webChannel: _webMapChannel,
+                      initialDestinations: _mapDestinations(
+                        mapDestinations,
+                        selectedId: focusTarget?.id,
                       ),
-                      selectedLatitude: selected?.latitude,
-                      selectedLongitude: selected?.longitude,
-                    )
-                  : _webViewController != null
-                      ? WebViewWidget(controller: _webViewController!)
-                      : const SizedBox.shrink()
-              : FlutterMap(
-                  mapController: _controller,
-                  options: const MapOptions(
-                    initialCenter: _garut,
-                    initialZoom: 9.5,
+                    ),
+                    selectedLatitude: focusTarget?.latitude,
+                    selectedLongitude: focusTarget?.longitude,
+                    focusKey:
+                        '${state.query.trim()}:${focusTarget?.id}:${widget.isActive}',
+                    onDestinationTap: _onWebMapMessage,
+                    isInteractive: !_isConfirmationOpen,
                   ),
-                  children: [
-                    TileLayer(
-                      urlTemplate:
-                          'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
-                      userAgentPackageName: 'com.example.guriang_garut',
-                    ),
-                    MarkerLayer(
-                      markers: [
-                        for (final d in list)
-                          Marker(
-                            point: LatLng(d.latitude, d.longitude),
-                            width: 44,
-                            height: 44,
-                            child: GestureDetector(
-                              onTap: () async {
-                                _select(d);
-                                await _openDirections(d);
-                              },
-                              child: Icon(
-                                _isCultureCategory(d.category)
-                                    ? Icons.account_balance
-                                    : Icons.park,
-                                size: _selectedId == d.id ? 44 : 34,
-                                color: _selectedId == d.id
-                                    ? Colors.red
-                                    : _isCultureCategory(d.category)
-                                        ? const Color(0xFF7B1FA2)
-                                        : AppColors.green,
-                              ),
-                            ),
-                          ),
-                      ],
-                    ),
-                    const RichAttributionWidget(
-                      attributions: [TextSourceAttribution('© OpenStreetMap')],
-                    ),
-                  ],
-                ),
+                )
+              : _webViewController != null
+                  ? WebViewWidget(controller: _webViewController!)
+                  : const Center(child: CircularProgressIndicator()),
         ),
         Positioned(
           top: 8,
-          left: 12,
           right: 12,
           child: Material(
             color: Colors.white.withValues(alpha: 0.95),
-            borderRadius: BorderRadius.circular(14),
+            borderRadius: BorderRadius.circular(20),
             elevation: 4,
-            child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+            child: const Padding(
+              padding: EdgeInsets.symmetric(horizontal: 12, vertical: 8),
               child: Row(
+                mainAxisSize: MainAxisSize.min,
                 children: [
+                  Icon(Icons.public, size: 16, color: AppColors.green),
+                  SizedBox(width: 5),
                   Text(
-                    'Peta:',
+                    'PETA 3D',
                     style: TextStyle(
+                      color: AppColors.green,
+                      fontSize: 12,
                       fontWeight: FontWeight.bold,
-                      fontSize: 13,
-                      color: Colors.grey.shade700,
                     ),
-                  ),
-                  const Spacer(),
-                  ChoiceChip(
-                    label: const Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Icon(Icons.public, size: 16),
-                        SizedBox(width: 3),
-                        Text('3D'),
-                      ],
-                    ),
-                    tooltip: '3D Terrain',
-                    selected: _is3DMode,
-                    selectedColor: AppColors.green.withValues(alpha: 0.2),
-                    labelStyle: TextStyle(
-                      color: _is3DMode ? AppColors.green : Colors.black87,
-                      fontWeight:
-                          _is3DMode ? FontWeight.bold : FontWeight.normal,
-                    ),
-                    onSelected: (_) => setState(() => _is3DMode = true),
-                  ),
-                  const SizedBox(width: 6),
-                  ChoiceChip(
-                    label: const Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Icon(Icons.map_outlined, size: 16),
-                        SizedBox(width: 3),
-                        Text('2D'),
-                      ],
-                    ),
-                    tooltip: '2D Standar',
-                    selected: !_is3DMode,
-                    selectedColor: AppColors.green.withValues(alpha: 0.2),
-                    labelStyle: TextStyle(
-                      color: !_is3DMode ? AppColors.green : Colors.black87,
-                      fontWeight:
-                          !_is3DMode ? FontWeight.bold : FontWeight.normal,
-                    ),
-                    onSelected: (_) => setState(() => _is3DMode = false),
                   ),
                 ],
               ),
@@ -510,55 +759,77 @@ class _MapScreenState extends State<MapScreen> {
         ),
         DraggableScrollableSheet(
           controller: _sheetController,
-          initialChildSize: 0.23,
-          minChildSize: 0.22,
-          maxChildSize: 0.65,
+          initialChildSize: 0.28,
+          minChildSize: 0.18,
+          maxChildSize: 0.75,
           snap: true,
-          snapSizes: const [0.23, 0.65],
-          builder: (context, scrollController) => Material(
-            color: Colors.white,
-            elevation: 5,
-            borderRadius: const BorderRadius.vertical(top: Radius.circular(16)),
-            clipBehavior: Clip.antiAlias,
-            child: Column(
-              children: [
-                Padding(
-                  padding: const EdgeInsets.only(top: 9, bottom: 5),
-                  child: Container(
-                    width: 38,
-                    height: 4,
-                    decoration: BoxDecoration(
-                      color: Colors.grey.shade400,
-                      borderRadius: BorderRadius.circular(4),
+          snapSizes: const [0.28, 0.75],
+          builder: (context, scrollController) => PointerInterceptor(
+            child: Material(
+              color: Colors.white,
+              elevation: 5,
+              borderRadius:
+                  const BorderRadius.vertical(top: Radius.circular(16)),
+              clipBehavior: Clip.antiAlias,
+              child: Column(
+                children: [
+                  InkWell(
+                    onTap: _toggleSheet,
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(
+                          vertical: 8, horizontal: 16),
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Container(
+                            width: 44,
+                            height: 5,
+                            decoration: BoxDecoration(
+                              color: Colors.grey.shade400,
+                              borderRadius: BorderRadius.circular(4),
+                            ),
+                          ),
+                          const SizedBox(width: 8),
+                          Icon(
+                            _sheetController.isAttached &&
+                                    _sheetController.size > 0.35
+                                ? Icons.keyboard_arrow_down
+                                : Icons.keyboard_arrow_up,
+                            size: 20,
+                            color: Colors.grey.shade600,
+                          ),
+                        ],
+                      ),
                     ),
                   ),
-                ),
-                CategoryChips(onCultureDropdownTap: _expandCultureSheet),
-                const SizedBox(height: 6),
-                Expanded(
-                  child: ListView(
-                    controller: scrollController,
-                    padding: const EdgeInsets.only(bottom: 12),
-                    children: [
-                      for (final d in list)
-                        DestinationCard(
-                          destination: d,
-                          trailing: IconButton(
-                            tooltip: 'Buka rute di Google Maps',
-                            onPressed: () => _openDirections(d),
-                            icon: const Icon(Icons.directions,
-                                color: AppColors.green),
+                  CategoryChips(onSubtypeDropdownTap: _expandCategorySheet),
+                  const SizedBox(height: 6),
+                  Expanded(
+                    child: ListView(
+                      controller: scrollController,
+                      physics: const AlwaysScrollableScrollPhysics(),
+                      padding: const EdgeInsets.only(bottom: 12),
+                      children: [
+                        for (final d in list)
+                          DestinationCard(
+                            destination: d,
+                            trailing: IconButton(
+                              tooltip: 'Buka rute di Google Maps',
+                              onPressed: () => _openDirections(d),
+                              icon: const Icon(Icons.directions,
+                                  color: AppColors.green),
+                            ),
+                            onTap: () {
+                              openDetail(context, d);
+                              _select(d);
+                            },
                           ),
-                          onTap: () {
-                            _select(d);
-                            openDetail(context, d);
-                          },
-                        ),
-                      const CopyrightFooter(),
-                    ],
+                        const CopyrightFooter(),
+                      ],
+                    ),
                   ),
-                ),
-              ],
+                ],
+              ),
             ),
           ),
         ),

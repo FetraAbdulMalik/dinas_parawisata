@@ -8,6 +8,7 @@ import 'package:sqflite/sqflite.dart';
 
 import '../models/app_user.dart';
 import '../models/destination.dart';
+import '../utils/destination_image_assets.dart';
 
 /// Database SQLite lokal: users, destinations, favorites.
 class DatabaseHelper {
@@ -22,7 +23,7 @@ class DatabaseHelper {
     final path = join(await getDatabasesPath(), 'guriang_garut.db');
     return openDatabase(
       path,
-      version: 8,
+      version: 17,
       onConfigure: (db) => db.execute('PRAGMA foreign_keys = ON'),
       onCreate: _onCreate,
       onUpgrade: (db, oldVersion, newVersion) async {
@@ -83,6 +84,44 @@ class DatabaseHelper {
           await db
               .execute('ALTER TABLE destinations ADD COLUMN video_url TEXT');
         }
+        if (oldVersion < 9) {
+          await db.execute(
+              'ALTER TABLE destinations ADD COLUMN opening_hours TEXT');
+          await db
+              .execute('ALTER TABLE destinations ADD COLUMN ticket_price TEXT');
+          await db
+              .execute('ALTER TABLE destinations ADD COLUMN facilities TEXT');
+          await db.execute('ALTER TABLE destinations ADD COLUMN contact TEXT');
+          await db.execute(
+              'ALTER TABLE destinations ADD COLUMN practical_info_updated_at TEXT');
+        }
+        if (oldVersion < 12) {
+          await _syncDestinationImageAssets(db);
+        }
+        if (oldVersion < 14) {
+          await _syncCoordinates(db);
+        }
+        if (oldVersion < 15) {
+          await db.execute('ALTER TABLE users ADD COLUMN avatar_image BLOB');
+        }
+        if (oldVersion < 16) {
+          await db.execute(
+              "ALTER TABLE destinations ADD COLUMN no_sk_bupati TEXT NOT NULL DEFAULT ''");
+        }
+        if (oldVersion < 17) {
+          await db.execute('''
+            UPDATE destinations
+            SET category = CASE name
+              WHEN 'Situ Cangkuang' THEN 'Danau'
+              WHEN 'Kawah Talaga Bodas' THEN 'Kawah'
+              WHEN 'Gunung Papandayan' THEN 'Gunung'
+              WHEN 'Situ Bagendit' THEN 'Danau'
+              WHEN 'Pantai Santolo' THEN 'Laut'
+              ELSE category
+            END
+            WHERE category = 'Alam'
+          ''');
+        }
       },
     );
   }
@@ -102,7 +141,8 @@ class DatabaseHelper {
         salt TEXT NOT NULL,
         password_hash TEXT NOT NULL,
         created_at TEXT NOT NULL,
-        auth_uid TEXT UNIQUE
+        auth_uid TEXT UNIQUE,
+        avatar_image BLOB
       )
     ''');
     await db.execute('''
@@ -119,7 +159,13 @@ class DatabaseHelper {
         image_asset TEXT,
         audio_asset TEXT,
         video_asset TEXT,
-        video_url TEXT
+        video_url TEXT,
+        opening_hours TEXT,
+        ticket_price TEXT,
+        facilities TEXT,
+        contact TEXT,
+        no_sk_bupati TEXT NOT NULL DEFAULT '',
+        practical_info_updated_at TEXT
       )
     ''');
     await db.execute('''
@@ -134,6 +180,59 @@ class DatabaseHelper {
     await _seed(db);
     await _seedIntangibleHeritage(db);
     await _syncStoryAssets(db);
+    await _syncDestinationImageAssets(db);
+  }
+
+  Future<void> _syncDestinationImageAssets(Database db) async {
+    final manifest = await AssetManifest.loadFromAssetBundle(rootBundle);
+    final imageAssets = manifest.listAssets().toSet();
+    final destinations =
+        await db.query('destinations', columns: ['id', 'name', 'image_asset']);
+
+    for (final destination in destinations) {
+      final id = destination['id'] as int;
+      final name = destination['name'] as String;
+      final matchingAsset = findDestinationImageAsset(
+        name,
+        imageAssets,
+        fallbackAsset: destination['image_asset'] as String? ?? '',
+      );
+      if (matchingAsset == null) continue;
+      if (destination['image_asset'] == matchingAsset) continue;
+      await db.update(
+        'destinations',
+        {'image_asset': matchingAsset},
+        where: 'id = ?',
+        whereArgs: [id],
+      );
+    }
+  }
+
+  Future<void> _syncCoordinates(Database db) async {
+    const coords = <String, (double, double)>{
+      'Gunung Papandayan': (-7.318686547827731, 107.7309635000461),
+      'Candi Cangkuang': (-7.10286040248776, 107.9182992265749),
+      'Situ Cangkuang': (-7.105450788232365, 107.9214014057605),
+      'Kampung Pulo': (-7.1030359595169825, 107.91812910325642),
+      'Pantai Santolo': (-7.660882685878713, 107.68492656654034),
+      'Kawah Talaga Bodas': (-7.210427606848121, 108.06521220797536),
+      'Situ Bagendit': (-7.16079045488683, 107.94142101721326),
+      'Pemandian Air Panas Cipanas': (-7.181298380110905, 107.87672405325715),
+      'Lais': (-7.098201366335401, 107.98433183899857),
+      'Badeng': (-7.088133643492038, 108.06296099928333),
+      'Surak Ibra': (-7.172884647723464, 107.98143637352516),
+    };
+    for (final entry in coords.entries) {
+      await db.update(
+        'destinations',
+        {
+          'latitude': entry.value.$1,
+          'longitude': entry.value.$2,
+        },
+        where: 'name = ?',
+        whereArgs: [entry.key],
+      );
+    }
   }
 
   Future<void> _syncStoryAssets(Database db) async {
@@ -164,75 +263,79 @@ class DatabaseHelper {
 
   Future<void> _seed(Database db) async {
     // Koordinat bersifat perkiraan; sesuaikan bila perlu.
-    // Isi image_url dengan tautan foto agar gambar tampil di aplikasi.
+    // Isi image_asset dengan path foto lokal untuk setiap destinasi.
     final data = <Map<String, Object?>>[
       {
         'name': 'Candi Cangkuang',
         'category': 'Cagar Budaya',
         'location': 'Leles, Garut',
-        'image_url': 'assets/images/candi_cangkuang.jpg',
+        'image_asset': 'assets/images/candi_cangkuang.jpg',
         'description':
             'Candi Cangkuang adalah candi Hindu yang berdiri di sebuah pulau kecil di tengah Situ Cangkuang. Pengunjung menyeberang dengan rakit bambu menuju kompleks candi dan kampung adat Pulo.',
         'history':
             'Candi ini ditemukan kembali pada tahun 1966 dan dipugar pada tahun 1970-an. Di dekatnya terdapat makam Embah Dalem Arief Muhammad yang dipercaya sebagai tokoh penyebar agama Islam di wilayah ini.',
-        'latitude': -7.1033,
-        'longitude': 107.9172,
+        'latitude': -7.10286040248776,
+        'longitude': 107.9182992265749,
       },
       {
         'name': 'Situ Cangkuang',
-        'category': 'Alam',
+        'category': 'Danau',
         'location': 'Leles, Garut',
+        'image_asset': 'assets/images/situ_cangkuang.jpg',
         'description':
             'Danau yang tenang dengan pemandangan perbukitan di sekelilingnya. Pengunjung dapat berkeliling dengan rakit dan menikmati suasana pedesaan Sunda.',
         'history':
             'Situ Cangkuang menjadi bagian dari kawasan cagar budaya bersama Candi Cangkuang dan Kampung Pulo.',
-        'latitude': -7.1050,
-        'longitude': 107.9150,
+        'latitude': -7.105450788232365,
+        'longitude': 107.9214014057605,
       },
       {
         'name': 'Kawah Talaga Bodas',
-        'category': 'Alam',
+        'category': 'Kawah',
         'location': 'Wanaraja, Garut',
+        'image_asset': 'assets/images/talaga_bodas.jpg',
         'description':
             'Kawah gunung berapi dengan danau berwarna putih kehijauan. Uap belerang dan pemandangan pegunungannya menjadikan tempat ini favorit untuk berfoto.',
         'history':
             'Talaga Bodas merupakan kawah dari gunung api yang masih menunjukkan aktivitas panas bumi, sehingga pengunjung perlu mengikuti arahan petugas.',
-        'latitude': -7.210076888841531,
-        'longitude': 108.06684691092859,
+        'latitude': -7.210427606848121,
+        'longitude': 108.06521220797536,
       },
       {
         'name': 'Gunung Papandayan',
-        'category': 'Alam',
+        'category': 'Gunung',
         'location': 'Cisurupan, Garut',
+        'image_asset': 'assets/images/gunung_papandayan.jpg',
         'description':
             'Gunung dengan kawah belerang aktif, hutan mati, dan padang edelweis. Jalur pendakiannya relatif ramah untuk pemula.',
         'history':
             'Papandayan pernah mengalami letusan besar pada tahun 1772 yang mengubah bentuk lereng dan kawahnya.',
-        'latitude': -7.318516284955626,
-        'longitude': 107.73117807675776,
+        'latitude': -7.318686547827731,
+        'longitude': 107.7309635000461,
       },
       {
         'name': 'Situ Bagendit',
-        'category': 'Alam',
-        'image_url': 'assets/images/situ_bangendit.jpg',
+        'category': 'Danau',
+        'image_asset': 'assets/images/situ_bangendit.jpg',
         'location': 'Banyuresmi, Garut',
         'description':
             'Danau luas dengan taman dan area bermain keluarga. Pengunjung dapat menaiki perahu dan menikmati kuliner di sekitarnya.',
         'history':
             'Situ Bagendit dikenal lewat legenda rakyat Sunda tentang Nyi Endit yang menjadi asal-usul danau ini.',
-        'latitude': -7.160024003191133,
-        'longitude': 107.94168923810281,
+        'latitude': -7.16079045488683,
+        'longitude': 107.94142101721326,
       },
       {
         'name': 'Kampung Pulo',
         'category': 'Cagar Budaya',
         'location': 'Leles, Garut',
+        'image_asset': 'assets/images/kampung_pulo.jpg',
         'description':
             'Kampung adat yang terdiri dari enam rumah dan satu mushola. Jumlah bangunan dan penghuninya dijaga sesuai adat turun-temurun.',
         'history':
             'Kampung Pulo berada di pulau kecil di Situ Cangkuang dan menjadi bagian penting dari sejarah penyebaran Islam di Garut.',
-        'latitude': -7.1028,
-        'longitude': 107.9181,
+        'latitude': -7.1030359595169825,
+        'longitude': 107.91812910325642,
       },
       {
         'name': 'Pemandian Air Panas Cipanas',
@@ -247,25 +350,21 @@ class DatabaseHelper {
       },
       {
         'name': 'Pantai Santolo',
-        'category': 'Alam',
+        'category': 'Laut',
         'location': 'Cikelet, Garut',
+        'image_asset': 'assets/images/pantai_santolo.jpeg',
         'description':
             'Pantai selatan Garut dengan pasir lembut, ombak besar, dan deretan warung ikan bakar. Cocok untuk menikmati matahari terbenam.',
         'history':
             'Santolo juga dikenal sebagai kampung nelayan dengan pelabuhan kecil yang ramai pada pagi hari.',
-        'latitude': -7.6678,
-        'longitude': 107.7219,
+        'latitude': -7.6511427,
+        'longitude': 107.6757856,
       },
     ];
     final batch = db.batch();
     for (final row in data) {
       // Nama file mengikuti nama destinasi, mis. assets/audio/candi_cangkuang.mp3
       final slug = _slug(row['name'] as String);
-      final imageUrl = row['image_url'] as String?;
-      if (imageUrl != null && imageUrl.startsWith('assets/')) {
-        row['image_asset'] = imageUrl;
-        row['image_url'] = '';
-      }
       row['audio_asset'] = 'assets/audio/$slug.mp3';
       row['video_asset'] = 'assets/video/$slug.mp4';
       row['video_url'] = '';
@@ -280,34 +379,37 @@ class DatabaseHelper {
         'name': 'Lais',
         'category': 'Warisan Budaya Tak Benda',
         'location': 'Cibatu, Garut',
+        'image_asset': 'assets/images/lais.jpg',
         'description':
             'Lais adalah seni pertunjukan akrobatik tradisional Garut. Penampil melakukan berbagai gerakan di atas tali yang dibentangkan di antara dua batang bambu tinggi, diiringi musik dan suasana pertunjukan rakyat.',
         'history':
             'Kesenian Lais tumbuh dan diwariskan oleh masyarakat Garut, khususnya di wilayah Cibatu. Pertunjukan ini menjadi bagian dari hiburan rakyat dan ditampilkan pada acara budaya atau perayaan masyarakat.',
-        'latitude': -7.0830,
-        'longitude': 107.9840,
+        'latitude': -7.098201366335401,
+        'longitude': 107.98433183899857,
       },
       {
         'name': 'Surak Ibra',
         'category': 'Warisan Budaya Tak Benda',
         'location': 'Wanaraja, Garut',
+        'image_asset': 'assets/images/surak_ibra.jpg',
         'description':
             'Surak Ibra adalah seni pertunjukan tradisional dari Garut yang menampilkan gerak berkelompok, iringan musik, dan seruan khas. Pertunjukan ini melibatkan kebersamaan para pemain dan biasanya dipentaskan dalam kegiatan budaya masyarakat.',
         'history':
             'Surak Ibra diwariskan oleh masyarakat Wanaraja dan dikenal sebagai salah satu kesenian khas Kabupaten Garut. Tradisi pertunjukannya terus dijaga melalui kelompok seni dan kegiatan kebudayaan setempat.',
-        'latitude': -7.1740,
-        'longitude': 107.9560,
+        'latitude': -7.1729044,
+        'longitude': 107.9814359,
       },
       {
         'name': 'Badeng',
         'category': 'Warisan Budaya Tak Benda',
         'location': 'Sanding, Malangbong, Garut',
+        'image_asset': 'assets/images/badeng.jpg',
         'description':
             'Badeng adalah seni pertunjukan tradisional masyarakat Sanding, Malangbong. Kesenian ini memadukan musik, nyanyian, dan gerak sebagai bagian dari ekspresi budaya masyarakat setempat.',
         'history':
             'Kesenian Badeng diwariskan secara turun-temurun di wilayah Sanding, Malangbong. Pementasan dan kelompok seni setempat berperan dalam menjaga keberlanjutan tradisi ini.',
-        'latitude': -7.0200,
-        'longitude': 108.0900,
+        'latitude': -7.088133643492038,
+        'longitude': 108.06296099928333,
       },
     ];
 
@@ -329,10 +431,31 @@ class DatabaseHelper {
   }
 
   // ---------- Destinasi ----------
+  static const Map<String, (double, double)> activeCoordinates = {
+    'Gunung Papandayan': (-7.318686547827731, 107.7309635000461),
+    'Candi Cangkuang': (-7.10286040248776, 107.9182992265749),
+    'Situ Cangkuang': (-7.105450788232365, 107.9214014057605),
+    'Kampung Pulo': (-7.1030359595169825, 107.91812910325642),
+    'Pantai Santolo': (-7.660882685878713, 107.68492656654034),
+    'Kawah Talaga Bodas': (-7.210427606848121, 108.06521220797536),
+    'Situ Bagendit': (-7.16079045488683, 107.94142101721326),
+    'Pemandian Air Panas Cipanas': (-7.181298380110905, 107.87672405325715),
+    'Lais': (-7.098201366335401, 107.98433183899857),
+    'Badeng': (-7.088133643492038, 108.06296099928333),
+    'Surak Ibra': (-7.172884647723464, 107.98143637352516),
+  };
+
   Future<List<Destination>> getDestinations() async {
     final db = await database;
     final rows = await db.query('destinations', orderBy: 'id ASC');
-    return rows.map(Destination.fromMap).toList();
+    return rows.map((r) {
+      final d = Destination.fromMap(r);
+      final override = activeCoordinates[d.name];
+      if (override != null) {
+        return d.copyWith(latitude: override.$1, longitude: override.$2);
+      }
+      return d;
+    }).toList();
   }
 
   Future<void> cacheDestinations(List<Destination> destinations) async {
@@ -353,6 +476,11 @@ class DatabaseHelper {
       );
     }
     await batch.commit(noResult: true);
+  }
+
+  Future<void> deleteDestination(int id) async {
+    final db = await database;
+    await db.delete('destinations', where: 'id = ?', whereArgs: [id]);
   }
 
   // ---------- Pengguna ----------
@@ -404,6 +532,7 @@ class DatabaseHelper {
     required String authUid,
     required String name,
     required String email,
+    String? avatarUrl,
   }) async {
     final db = await database;
     final normalizedEmail = email.toLowerCase();
@@ -427,6 +556,8 @@ class DatabaseHelper {
           name: name,
           email: normalizedEmail,
           authUid: authUid,
+          avatarUrl: avatarUrl,
+          avatarBytes: byUid.first['avatar_image'] as Uint8List?,
         );
       }
 
@@ -449,6 +580,8 @@ class DatabaseHelper {
           name: name,
           email: normalizedEmail,
           authUid: authUid,
+          avatarUrl: avatarUrl,
+          avatarBytes: legacyUser.first['avatar_image'] as Uint8List?,
         );
       }
 
@@ -466,6 +599,7 @@ class DatabaseHelper {
         name: name,
         email: normalizedEmail,
         authUid: authUid,
+        avatarUrl: avatarUrl,
       );
     });
   }
@@ -494,6 +628,16 @@ class DatabaseHelper {
   Future<void> updateName(int id, String name) async {
     final db = await database;
     await db.update('users', {'name': name}, where: 'id = ?', whereArgs: [id]);
+  }
+
+  Future<void> updateProfilePhoto(int id, Uint8List bytes) async {
+    final db = await database;
+    await db.update(
+      'users',
+      {'avatar_image': bytes},
+      where: 'id = ?',
+      whereArgs: [id],
+    );
   }
 
   Future<bool> changePassword(int id, String oldPw, String newPw) async {

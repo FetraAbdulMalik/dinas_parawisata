@@ -10,6 +10,7 @@ import 'providers/app_state.dart';
 import 'services/supabase_service.dart';
 import 'screens/main_shell.dart';
 import 'theme.dart';
+import 'widgets/guriang_loading_screen.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -48,12 +49,9 @@ class GuriangApp extends StatelessWidget {
     return MaterialApp(
       title: 'Guriang Garut',
       debugShowCheckedModeBanner: false,
+      scrollBehavior: AppScrollBehavior(),
       theme: buildTheme(),
-      home: !state.ready
-          ? const Scaffold(
-              body: Center(
-                  child: CircularProgressIndicator(color: AppColors.green)))
-          : const MainShell(),
+      home: !state.ready ? const GuriangLoadingScreen() : const MainShell(),
     );
   }
 }

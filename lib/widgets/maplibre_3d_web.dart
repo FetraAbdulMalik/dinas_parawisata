@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:js_interop';
 import 'dart:ui_web' as ui_web;
@@ -11,6 +12,9 @@ class MapLibre3DWebView extends StatefulWidget {
   final List<Map<String, Object>> destinations;
   final double? selectedLatitude;
   final double? selectedLongitude;
+  final String focusKey;
+  final ValueChanged<int> onDestinationTap;
+  final bool isInteractive;
 
   const MapLibre3DWebView({
     super.key,
@@ -19,6 +23,9 @@ class MapLibre3DWebView extends StatefulWidget {
     required this.destinations,
     required this.selectedLatitude,
     required this.selectedLongitude,
+    required this.focusKey,
+    required this.onDestinationTap,
+    this.isInteractive = true,
   });
 
   @override
@@ -33,6 +40,8 @@ class _MapLibre3DWebViewState extends State<MapLibre3DWebView> {
   web.HTMLIFrameElement? _frame;
   bool _ready = false;
   String? _lastState;
+  Timer? _stateRetryTimer;
+  Timer? _focusDebounceTimer;
 
   @override
   void initState() {
@@ -44,7 +53,8 @@ class _MapLibre3DWebViewState extends State<MapLibre3DWebView> {
     web.window.addEventListener('message', _messageListener);
     ui_web.platformViewRegistry.registerViewFactory(_viewType, (viewId) {
       final frame = web.HTMLIFrameElement()
-        ..style.cssText = 'border: 0; width: 100%; height: 100%;'
+        ..style.cssText =
+            'border: 0; width: 100%; height: 100%; pointer-events: ${widget.isInteractive ? 'auto' : 'none'};'
         ..setAttribute('title', 'Peta 3D Guriang Garut')
         ..srcdoc = widget.html.toJS;
       _frame = frame;
@@ -55,7 +65,22 @@ class _MapLibre3DWebViewState extends State<MapLibre3DWebView> {
   @override
   void didUpdateWidget(covariant MapLibre3DWebView oldWidget) {
     super.didUpdateWidget(oldWidget);
-    _sendState();
+    if (oldWidget.isInteractive != widget.isInteractive) {
+      _frame?.style.pointerEvents = widget.isInteractive ? 'auto' : 'none';
+    }
+    if (oldWidget.focusKey != widget.focusKey ||
+        oldWidget.selectedLatitude != widget.selectedLatitude ||
+        oldWidget.selectedLongitude != widget.selectedLongitude) {
+      _stateRetryTimer?.cancel();
+      _stateRetryTimer = null;
+      _focusDebounceTimer?.cancel();
+      _focusDebounceTimer = Timer(
+        const Duration(milliseconds: 600),
+        _sendState,
+      );
+    } else {
+      _sendState();
+    }
   }
 
   void _handleMessage(web.MessageEvent event) {
@@ -75,6 +100,12 @@ class _MapLibre3DWebViewState extends State<MapLibre3DWebView> {
     if (decoded['kind'] == 'ready') {
       _ready = true;
       _sendState();
+    } else if (decoded['kind'] == 'stateApplied' &&
+        decoded['focusKey'] == widget.focusKey) {
+      _stateRetryTimer?.cancel();
+      _stateRetryTimer = null;
+    } else if (decoded['kind'] == 'destination' && decoded['id'] is num) {
+      widget.onDestinationTap((decoded['id'] as num).toInt());
     }
   }
 
@@ -86,15 +117,32 @@ class _MapLibre3DWebViewState extends State<MapLibre3DWebView> {
       'destinations': widget.destinations,
       'latitude': widget.selectedLatitude,
       'longitude': widget.selectedLongitude,
+      'focusKey': widget.focusKey,
     });
     if (state == _lastState) return;
     _lastState = state;
-    _frame?.contentWindow
-        ?.postMessage(state.toJS, web.window.location.origin.toJS);
+    _stateRetryTimer?.cancel();
+    var attempts = 0;
+    void sendState() {
+      _frame?.contentWindow?.postMessage(state.toJS, '*'.toJS);
+      attempts++;
+      if (attempts >= 20) {
+        _stateRetryTimer?.cancel();
+        _stateRetryTimer = null;
+      }
+    }
+
+    sendState();
+    _stateRetryTimer = Timer.periodic(
+      const Duration(milliseconds: 100),
+      (_) => sendState(),
+    );
   }
 
   @override
   void dispose() {
+    _stateRetryTimer?.cancel();
+    _focusDebounceTimer?.cancel();
     web.window.removeEventListener('message', _messageListener);
     _frame?.remove();
     super.dispose();

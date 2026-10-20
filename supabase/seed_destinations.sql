@@ -1,0 +1,173 @@
+-- Script untuk memasukkan seluruh data destinasi Guriang Garut ke Supabase dengan koordinat presisi terbaru
+-- Buka Supabase Dashboard > SQL Editor > New Query > Paste script ini > Run
+
+insert into public.destinations (
+  id, name, category, location, description, history, latitude, longitude, image_asset, audio_asset, video_asset, video_url
+) values
+  (
+    1,
+    'Candi Cangkuang',
+    'Cagar Budaya',
+    'Leles, Garut',
+    'Candi Cangkuang adalah candi Hindu yang berdiri di sebuah pulau kecil di tengah Situ Cangkuang. Pengunjung menyeberang dengan rakit bambu menuju kompleks candi dan kampung adat Pulo.',
+    'Candi ini ditemukan kembali pada tahun 1966 dan dipugar pada tahun 1970-an. Di dekatnya terdapat makam Embah Dalem Arief Muhammad yang dipercaya sebagai tokoh penyebar agama Islam di wilayah ini.',
+    -7.10286040248776,
+    107.9182992265749,
+    'assets/images/candi_cangkuang.jpg',
+    'assets/audio/candi_cangkuang.mp3',
+    'assets/video/candi_cangkuang.mp4',
+    ''
+  ),
+  (
+    2,
+    'Situ Cangkuang',
+    'Danau',
+    'Leles, Garut',
+    'Danau yang tenang dengan pemandangan perbukitan di sekelilingnya. Pengunjung dapat berkeliling dengan rakit dan menikmati suasana pedesaan Sunda.',
+    'Situ Cangkuang menjadi bagian dari kawasan cagar budaya bersama Candi Cangkuang dan Kampung Pulo.',
+    -7.105450788232365,
+    107.9214014057605,
+    'assets/images/situ_cangkuang.jpg',
+    'assets/audio/situ_cangkuang.mp3',
+    'assets/video/situ_cangkuang.mp4',
+    ''
+  ),
+  (
+    3,
+    'Kawah Talaga Bodas',
+    'Kawah',
+    'Wanaraja, Garut',
+    'Kawah gunung berapi dengan danau berwarna putih kehijauan. Uap belerang dan pemandangan pegunungannya menjadikan tempat ini favorit untuk berfoto.',
+    'Talaga Bodas merupakan kawah dari gunung api yang masih menunjukkan aktivitas panas bumi, sehingga pengunjung perlu mengikuti arahan petugas.',
+    -7.210427606848121,
+    108.06521220797536,
+    'assets/images/talaga_bodas.jpg',
+    'assets/audio/kawah_talaga_bodas.mp3',
+    'assets/video/kawah_talaga_bodas.mp4',
+    ''
+  ),
+  (
+    4,
+    'Gunung Papandayan',
+    'Gunung',
+    'Cisurupan, Garut',
+    'Gunung dengan kawah belerang aktif, hutan mati, dan padang edelweis. Jalur pendakiannya relatif ramah untuk pemula.',
+    'Papandayan pernah mengalami letusan besar pada tahun 1772 yang mengubah bentuk lereng dan kawahnya.',
+    -7.318686547827731,
+    107.7309635000461,
+    'assets/images/gunung_papandayan.jpg',
+    'assets/audio/gunung_papandayan.mp3',
+    'assets/video/gunung_papandayan.mp4',
+    ''
+  ),
+  (
+    5,
+    'Situ Bagendit',
+    'Danau',
+    'Banyuresmi, Garut',
+    'Danau luas dengan taman dan area bermain keluarga. Pengunjung dapat menaiki perahu dan menikmati kuliner di sekitarnya.',
+    'Situ Bagendit dikenal lewat legenda rakyat Sunda tentang Nyi Endit yang menjadi asal-usul danau ini.',
+    -7.16079045488683,
+    107.94142101721326,
+    'assets/images/situ_bangendit.jpg',
+    'assets/audio/situ_bagendit.mp3',
+    'assets/video/situ_bagendit.mp4',
+    ''
+  ),
+  (
+    6,
+    'Kampung Pulo',
+    'Cagar Budaya',
+    'Leles, Garut',
+    'Kampung adat yang terdiri dari enam rumah dan satu mushola. Jumlah bangunan dan penghuninya dijaga sesuai adat turun-temurun.',
+    'Kampung Pulo berada di pulau kecil di Situ Cangkuang dan menjadi bagian penting dari sejarah penyebaran Islam di Garut.',
+    -7.1030359595169825,
+    107.91812910325642,
+    'assets/images/kampung_pulo.jpg',
+    'assets/audio/kampung_pulo.mp3',
+    'assets/video/kampung_pulo.mp4',
+    ''
+  ),
+  (
+    7,
+    'Pemandian Air Panas Cipanas',
+    'Alam',
+    'Tarogong Kaler, Garut',
+    'Kawasan pemandian air panas alami dari kaki Gunung Guntur yang terkenal sebagai tempat bersantai sejak masa kolonial.',
+    'Sumber air panas Cipanas telah dimanfaatkan sebagai tempat peristirahatan sejak zaman Hindia Belanda.',
+    -7.181298380110905,
+    107.87672405325715,
+    'assets/images/pemandian_air_panas_cipanas.jpg',
+    'assets/audio/pemandian_air_panas_cipanas.mp3',
+    'assets/video/pemandian_air_panas_cipanas.mp4',
+    ''
+  ),
+  (
+    8,
+    'Pantai Santolo',
+    'Laut',
+    'Cikelet, Garut',
+    'Pantai selatan Garut dengan pasir lembut, ombak besar, dan deretan warung ikan bakar. Cocok untuk menikmati matahari terbenam.',
+    'Santolo juga dikenal sebagai kampung nelayan dengan pelabuhan kecil yang ramai pada pagi hari.',
+    -7.6511427,
+    107.6757856,
+    'assets/images/pantai_santolo.jpeg',
+    'assets/audio/pantai_santolo.mp3',
+    'assets/video/pantai_santolo.mp4',
+    ''
+  ),
+  (
+    9,
+    'Lais',
+    'Warisan Budaya Tak Benda',
+    'Cibatu, Garut',
+    'Lais adalah seni pertunjukan akrobatik tradisional Garut. Penampil melakukan berbagai gerakan di atas tali yang dibentangkan di antara dua batang bambu tinggi, diiringi musik dan suasana pertunjukan rakyat.',
+    'Kesenian Lais tumbuh dan diwariskan oleh masyarakat Garut, khususnya di wilayah Cibatu. Pertunjukan ini menjadi bagian dari hiburan rakyat dan ditampilkan pada acara budaya atau perayaan masyarakat.',
+    -7.098201366335401,
+    107.98433183899857,
+    'assets/images/lais.jpg',
+    'assets/audio/lais.mp3',
+    'assets/video/lais.mp4',
+    ''
+  ),
+  (
+    10,
+    'Surak Ibra',
+    'Warisan Budaya Tak Benda',
+    'Wanaraja, Garut',
+    'Surak Ibra adalah seni pertunjukan tradisional dari Garut yang menampilkan gerak berkelompok, iringan musik, dan seruan khas. Pertunjukan ini melibatkan kebersamaan para pemain dan biasanya dipentaskan dalam kegiatan budaya masyarakat.',
+    'Surak Ibra diwariskan oleh masyarakat Wanaraja dan dikenal sebagai salah satu kesenian khas Kabupaten Garut. Tradisi pertunjukannya terus dijaga melalui kelompok seni dan kegiatan kebudayaan setempat.',
+    -7.1729044,
+    107.9814359
+    'assets/images/surak_ibra.jpg',
+    'assets/audio/surak_ibra.mp3',
+    'assets/video/surak_ibra.mp4',
+    ''
+  ),
+  (
+    11,
+    'Badeng',
+    'Warisan Budaya Tak Benda',
+    'Sanding, Malangbong, Garut',
+    'Badeng adalah seni pertunjukan tradisional masyarakat Sanding, Malangbong. Kesenian ini memadukan musik, nyanyian, dan gerak sebagai bagian dari ekspresi budaya masyarakat setempat.',
+    'Kesenian Badeng diwariskan secara turun-temurun di wilayah Sanding, Malangbong. Pementasan dan kelompok seni setempat berperan dalam menjaga keberlanjutan tradisi ini.',
+    -7.088133643492038,
+    108.06296099928333,
+    'assets/images/badeng.jpg',
+    'assets/audio/badeng.mp3',
+    'assets/video/badeng.mp4',
+    ''
+  )
+on conflict (id) do update
+set
+  name = excluded.name,
+  category = excluded.category,
+  location = excluded.location,
+  description = excluded.description,
+  history = excluded.history,
+  latitude = excluded.latitude,
+  longitude = excluded.longitude,
+  image_asset = excluded.image_asset,
+  audio_asset = excluded.audio_asset,
+  video_asset = excluded.video_asset,
+  video_url = excluded.video_url;
