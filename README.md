@@ -27,9 +27,10 @@ Favorit, Detail + Pemutar Audio, Profil, Pengaturan Privasi, dan FAQ.
 
 Versi web menjalankan aplikasi Flutter yang sama dengan APK, termasuk katalog
 destinasi dan navigasi. Browser menyimpan data lokalnya sendiri; akun dan
-sinkronisasi Supabase memerlukan konfigurasi `.env`. Peta web menyediakan
-tampilan terrain 3D dan peta standar 2D. Setelah APK release dibuat, jalankan script berikut dari
-PowerShell untuk membangun website dan menyalin APK ke folder unduhannya:
+sinkronisasi Supabase memerlukan konfigurasi `.env`. Peta menggunakan tampilan
+terrain 3D. Setelah APK release dibuat, jalankan
+script berikut dari PowerShell untuk membangun website dan menyalin APK ke
+folder unduhannya:
 
        .\tools\build_website.ps1
 
@@ -39,7 +40,6 @@ dengan pilihan **Buka Website** atau **Unduh Aplikasi Android**, lalu bisa
 membaca penjelasan fitur, destinasi, cerita, dan FAQ sebelum memilih. Aplikasi
 web baru dimuat setelah tombol **Buka Website** dipilih. APK tersedia di
 `downloads/guriang-garut.apk`.
-
 
 ## Database SQLite (lokal/offline)
 
@@ -65,8 +65,8 @@ Destinasi diisi otomatis (seed), termasuk contoh Warisan Budaya Tak Benda Garut
 seperti Lais, Surak Ibra, dan Badeng. Untuk menambah atau mengubah data, edit
 daftar `data` di `_seed` atau `_seedIntangibleHeritage` sesuai jenis datanya.
 Versi database 6 menambahkan data budaya; versi 8 menambahkan cache UID Supabase
-dan jalur fallback media pada instalasi lama tanpa menghapus akun maupun daftar
-favorit. Koordinat destinasi bersifat perkiraan;
+dan jalur fallback media; versi 15 menambahkan cache foto profil lokal pada
+instalasi lama tanpa menghapus akun maupun daftar favorit. Koordinat destinasi bersifat perkiraan;
 verifikasi sebelum digunakan untuk navigasi.
 
 ### Kategori budaya
@@ -138,8 +138,7 @@ tersebut, atau hapus data aplikasi (ini juga menghapus akun dan favorit lokal).
   tampil placeholder hijau. Isi dengan tautan foto (https) agar gambar tampil.
 - **Koordinat** destinasi bersifat perkiraan; cek ulang di peta sebelum rilis.
 - **Peta 3D** menampilkan relief terrain Garut dengan MapLibre GL JS di dalam
-  aplikasi. Tampilan 2D memakai OpenStreetMap melalui `flutter_map`; peta daring
-  memerlukan koneksi internet.
+  aplikasi; peta daring memerlukan koneksi internet.
 - Tombol arah pada setiap destinasi membuka rute dari lokasi pengguna ke
   destinasi tersebut di Google Maps. Jika aplikasi Google Maps terpasang,
   tautannya akan membukanya; selain itu tautan dibuka di browser.
